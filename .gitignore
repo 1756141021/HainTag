@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Temp / debug
+.tmp/
+.native_appdata/
+debug_*.txt
+__temp_*.txt
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local settings (may contain tokens)
+.claude/settings.local.json
+
+# Large data files
+*.png
+*.jpg
+*.jpeg
+
+# Archive / old projects
+1_test/
+app/
+build/
+text/
+世界书/
+wiki_viva_la_vita_Word*/
+__AIGenerateHistory/
+
+# One-off files
+1.html
+1111.sln
+build_native.ps1
+annotate_pdf.py
+新建文本文档.html
+AI-Tag-Generator-Native-Task.md
