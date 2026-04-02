@@ -5,6 +5,36 @@ All notable changes to AI Tag Generator will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-04-02
+
+### Added
+- **工作台合并** — 输入和输出卡片合并为一个"工作台"卡片，QSplitter 可拖动分割线调整比例，⇅ 按钮交换输入/输出位置
+- **TAG 拖拽排序** — 左键按住 TAG 拖动可调整顺序，拖动中高亮源和目标
+- **TAG 提取标记** — `[TAGS]...[/TAGS]` 和 `[NOTAGS]...[/NOTAGS]` 自动从 LLM 输出中提取 TAG，标记可在设置面板自定义
+- **TAG 自动补全** — 完整 TAG 和无角色 TAG 编辑器均支持 Danbooru 词典自动补全
+- **TAG 分类中文翻译** — hover 时分类名显示中文（质量/角色/场景等）
+- **新手引导** — 首次启动弹出步骤式高亮引导（6 步），介绍主要功能区域，可跳过
+- **默认提示词预设** — 内置 7 条 TAG 生成提示词模板，新用户开箱即用
+- **默认例图** — 内置一张示例图 + metadata 原始 TAG，新用户立即看到效果
+- **霞鹜文楷 Screen** — 内置字体（SIL OFL），默认字体 profile
+- **程序图标** — 自定义 Q 版角色图标（EXE + 窗口任务栏）
+- **画师库 hint** — 首次使用提示气泡引导打开画师库/OC 库
+- **Tooltip 引导** — 深度/顺序字段、× 收纳按钮、画师库入口、TAG 提取标记均有 hover 说明
+
+### Changed
+- **品牌重命名** — AITagGenerator → **HainTag**（海茵的标签工坊），EXE/窗口标题/AppData 目录全部更新
+- **例图消息格式** — 合并为单条 assistant 消息：`例图N：\n画面描述：xxx\n\`\`\`\ntags\n\`\`\``
+- **Depth 排序修复** — 同 depth 条目按 Order 分组后一次性 splice 插入，保持顺序不反转，user+assistant 配对不拆散
+- **默认亮度** — 暗色主题 brightness 默认 0（纯暗），亮色默认 100
+- **默认 max_tokens** — 2048 → 64000
+- **Hint 时机** — 首次启动时 hint 气泡在新手引导结束后才弹出
+
+### Fixed
+- **例图不完整警告** — 只填 tags 没填描述（或反过来）时显示橙色提示
+- **首次启动例图不显示** — `_load_state_into_ui` 首次路径未创建例图卡片
+
+---
+
 ## [0.4.0] - 2026-04-01
 
 ### Changed

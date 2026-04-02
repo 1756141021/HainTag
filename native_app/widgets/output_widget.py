@@ -50,6 +50,24 @@ CATEGORY_COLORS: dict[str, str] = {
     'quality':    '#7c8a99',
 }
 
+_CATEGORY_NAMES_ZH: dict[str, str] = {
+    'character': '角色',
+    'scene': '场景',
+    'pose': '姿势',
+    'clothing': '服饰',
+    'expression': '表情',
+    'body': '身体',
+    'style': '风格',
+    'quality': '质量',
+    'lighting': '光影',
+    'camera': '视角',
+    'effect': '效果',
+    'nsfw': 'NSFW',
+    'action': '动作',
+    'accessory': '配件',
+    'text': '文字',
+}
+
 CATEGORY_COLORS_LIGHT: dict[str, str] = {
     'character':  '#008820',
     'scene':      '#3a7a48',
@@ -242,7 +260,7 @@ class TagTextEdit(QTextEdit):
                     if tr:
                         lines.append(tr)
                 if tag.category:
-                    lines.append(f'[{tag.category}]')
+                    lines.append(f'[{_CATEGORY_NAMES_ZH.get(tag.category, tag.category)}]')
                 tip = '\n'.join(lines) if lines else tag.name
                 QToolTip.showText(event.globalPosition().toPoint(), tip, self)
         super().mouseMoveEvent(event)

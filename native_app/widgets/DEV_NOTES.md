@@ -276,6 +276,16 @@ ThumbCache.request() → ThumbLoaderThread → thumbnail_ready → delegate repa
 - **_OutfitRow**：服装条目行（toggle + 名称 + tags + 删除）
 - **_RefImageGrid**：参考图网格（支持纵向/横向布局，添加/删除图片）
 
+## onboarding.py
+- **OnboardingStep**：dataclass，定义单步引导（widget/title/description/position）
+- **OnboardingOverlay**：全屏半透明遮罩 + 高亮切口 + 说明面板
+  - `set_steps(steps)` 设置引导步骤列表
+  - `start()` 开始引导
+  - `_show_step()` 显示当前步骤，高亮目标 widget，定位说明面板
+  - `paintEvent` 绘制遮罩 + 圆角切口 + accent 边框
+  - 下一步 / 跳过按钮，最后一步显示"开始使用"
+  - `finished` 信号 — 引导结束后触发（window.py 用来延迟注册 hint 气泡）
+
 ## hint_manager.py
 - **HintBubble**：浮动提示气泡（ToolTip 窗口类型，不抢焦点）
   - 淡入动画 200ms，8 秒自动消失或点击关闭

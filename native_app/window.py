@@ -11,7 +11,7 @@ if sys.platform == "win32":
     from ctypes import wintypes
 
 from PyQt6.QtCore import QEasingCurve, QEvent, QPoint, QRect, QSize, Qt, QTimer, QPropertyAnimation, pyqtProperty
-from PyQt6.QtGui import QAction, QColor, QCursor, QGuiApplication, QKeySequence, QPainter, QShortcut
+from PyQt6.QtGui import QAction, QColor, QCursor, QGuiApplication, QIcon, QKeySequence, QPainter, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QAbstractButton,
@@ -175,6 +175,9 @@ class MainWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(720, 480)
         self.setWindowTitle(self._translator.t('app_title'))
+        icon_path = Path(__file__).parent / 'resources' / 'icon.png'
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         self.surface = WindowSurface(self)
         self.surface.setObjectName('WindowSurface')
@@ -425,6 +428,12 @@ class MainWindow(QWidget):
         if not self._has_persisted_state:
             self.prompt_card.hide()
             self.main_card.show()
+            # Create default example cards (docked)
+            for index, example in enumerate(self._state.examples, start=1):
+                self._next_example_index = index + 1
+                docked_state = WidgetState(widget_id=f'widget-example-{index}', visible=False, docked=True)
+                self._create_example_card(example, widget_id=f'widget-example-{index}', state=docked_state)
+            self._refresh_dock_items()
             return
 
         if prompt_state is not None:
@@ -542,8 +551,11 @@ class MainWindow(QWidget):
         if self._state.window.maximized:
             self.showMaximized()
             self._apply_native_window_style()
-        self._register_hints()
         QTimer.singleShot(100, self._reposition_swap_btn)
+        if not self._has_persisted_state:
+            QTimer.singleShot(800, self._start_onboarding)
+        else:
+            self._register_hints()
 
     def _restore_widget_layouts(self) -> None:
         saved_widget_states = {item.widget_id: item for item in self._state.widgets}
@@ -1266,6 +1278,7 @@ class MainWindow(QWidget):
         font_menu = menu.addMenu(self._translator.t('font_style'))
         for profile_id, label_key in [
             ('default', 'font_default'),
+            ('wenkai', 'font_wenkai'),
             ('yahei', 'font_yahei'),
             ('segoe', 'font_segoe'),
         ]:
@@ -2136,6 +2149,21 @@ class MainWindow(QWidget):
             self._library_panel.oc_entries(),
         )
 
+    def _start_onboarding(self) -> None:
+        from .widgets.onboarding import OnboardingOverlay, OnboardingStep
+        t = self._translator.t
+        overlay = OnboardingOverlay(self.surface, self._translator)
+        overlay.finished.connect(self._register_hints)
+        overlay.set_steps([
+            OnboardingStep(None, t("tour_welcome_title"), t("tour_welcome_desc")),
+            OnboardingStep(self.btn_settings, t("tour_settings_title"), t("tour_settings_desc"), "below"),
+            OnboardingStep(self.main_card, t("tour_workbench_title"), t("tour_workbench_desc"), "right"),
+            OnboardingStep(self.prompt_card, t("tour_prompts_title"), t("tour_prompts_desc"), "right"),
+            OnboardingStep(self._lib_tab_btn, t("tour_library_title"), t("tour_library_desc"), "left"),
+            OnboardingStep(self.btn_help, t("tour_shortcuts_title"), t("tour_shortcuts_desc"), "below"),
+        ])
+        overlay.start()
+
     def _register_hints(self) -> None:
         """Register first-time-use hint bubbles on key widgets."""
         h = self._hint_manager
@@ -2147,6 +2175,8 @@ class MainWindow(QWidget):
                    "hint_help", position="below", delay_ms=4000)
         h.register(self.output_widget.full_editor, "hint_scrub",
                    "hint_scrub", position="above", delay_ms=5000)
+        h.register(self._lib_tab_btn, "hint_library",
+                   "hint_library", position="left", delay_ms=6000)
 
     def _on_history_entry_selected(self, output_text: str) -> None:
         self.output_widget.set_full_tags(output_text)

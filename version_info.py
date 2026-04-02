@@ -4,8 +4,8 @@
 # http://msdn.microsoft.com/en-us/library/ms646997.aspx
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(0, 3, 0, 0),
-    prodvers=(0, 3, 0, 0),
+    filevers=(0, 5, 2, 0),
+    prodvers=(0, 5, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,13 +16,13 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable('040904B0', [
-        StringStruct('CompanyName', ''),
-        StringStruct('FileDescription', 'AI Tag Generator'),
-        StringStruct('FileVersion', '0.3.0.0'),
-        StringStruct('InternalName', 'AITagGenerator'),
-        StringStruct('OriginalFilename', 'AITagGenerator.exe'),
-        StringStruct('ProductName', 'AI Tag Generator'),
-        StringStruct('ProductVersion', '0.3.0.0'),
+        StringStruct('CompanyName', 'Hein'),
+        StringStruct('FileDescription', 'HainTag - 海茵的标签工坊'),
+        StringStruct('FileVersion', '0.5.2.0'),
+        StringStruct('InternalName', 'HainTag'),
+        StringStruct('OriginalFilename', 'HainTag.exe'),
+        StringStruct('ProductName', 'HainTag'),
+        StringStruct('ProductVersion', '0.5.2.0'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

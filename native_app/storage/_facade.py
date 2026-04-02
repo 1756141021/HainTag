@@ -29,7 +29,7 @@ from ._state import StateStorage
 
 
 class AppStorage:
-    def __init__(self, app_name: str = "AITagGenerator") -> None:
+    def __init__(self, app_name: str = "HainTag") -> None:
         appdata_root = os.environ.get("APPDATA")
         base_path = Path(appdata_root) if appdata_root else Path.home() / "AppData" / "Roaming"
         self._init_paths(base_path / app_name)

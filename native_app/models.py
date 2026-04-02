@@ -306,21 +306,21 @@ class AppSettings:
     top_k: int | None = None
     freq_penalty: float = 0.0
     pres_penalty: float = 0.0
-    max_tokens: int = 2048
+    max_tokens: int = 64000
     stream: bool = True
     memory_mode: bool = True
     summary_prompt: str = DEFAULT_SUMMARY_PROMPT
     language: str = "zh-CN"
     ui_scale_percent: int = 100
     body_font_point_size: int = 11
-    font_profile: str = "default"
+    font_profile: str = "wenkai"
     custom_font_id: str = ""
     theme: str = "dark"
     card_opacity: int = 82
     custom_bg_image: str = ""
     bg_blur: int = 30
     bg_opacity: int = 40
-    bg_brightness: int = 50
+    bg_brightness: int = 0
     workspace_menu_order: list[str] | None = None
     image_manager_folder: str = ""
     # TAG extraction markers
@@ -361,14 +361,14 @@ class AppSettings:
             language=str(data.get("language", "zh-CN") or "zh-CN"),
             ui_scale_percent=clamp_int(data.get("ui_scale_percent", 100), 100, 50, 300),
             body_font_point_size=clamp_int(data.get("body_font_point_size", 11), 11, 8, 24),
-            font_profile=str(data.get("font_profile", "default") or "default"),
+            font_profile=str(data.get("font_profile", "wenkai") or "wenkai"),
             custom_font_id=str(data.get("custom_font_id", "") or ""),
             theme=str(data.get("theme", "dark") or "dark"),
             card_opacity=clamp_int(data.get("card_opacity", 82), 82, 30, 100),
             custom_bg_image=str(data.get("custom_bg_image", "") or ""),
             bg_blur=clamp_int(data.get("bg_blur", 30), 30, 0, 100),
             bg_opacity=clamp_int(data.get("bg_opacity", 40), 40, 0, 100),
-            bg_brightness=clamp_int(data.get("bg_brightness", 50), 50, 0, 100),
+            bg_brightness=clamp_int(data.get("bg_brightness", 0), 0, 0, 100),
             workspace_menu_order=data.get("workspace_menu_order"),
             image_manager_folder=str(data.get("image_manager_folder", "") or ""),
             tag_full_start=str(data.get("tag_full_start", "[TAGS]") or "[TAGS]"),
@@ -434,15 +434,58 @@ class AppState:
     @classmethod
     def default(cls) -> "AppState":
         return cls(
-            prompts=[PromptEntry()],
-            examples=[ExampleEntry() for _ in range(2)],
+            prompts=cls._load_default_prompts(),
+            examples=cls._load_default_examples(),
             widgets=[
-                WidgetState(widget_id="widget-prompts", visible=False, docked=True, dock_slot="main"),
-                WidgetState(widget_id="widget-input", visible=True, docked=False, width=640, height=420),
+                WidgetState(widget_id="widget-prompts", visible=False, docked=True),
+                WidgetState(widget_id="widget-main", visible=True, docked=False, width=640, height=500),
                 WidgetState(widget_id="widget-example-1", visible=False, docked=True),
-                WidgetState(widget_id="widget-example-2", visible=False, docked=True),
             ],
         )
+
+    @staticmethod
+    def _load_default_examples() -> list[ExampleEntry]:
+        import json, shutil, uuid
+        from pathlib import Path
+        res_dir = Path(__file__).parent / "resources"
+        json_path = res_dir / "default_examples.json"
+        image_src = res_dir / "default_example.png"
+        if not json_path.exists():
+            return [ExampleEntry()]
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            examples = []
+            for i, d in enumerate(data):
+                if not isinstance(d, dict):
+                    continue
+                entry = ExampleEntry.from_dict(d)
+                # Copy bundled image to AppData examples dir
+                if not entry.image_path and image_src.exists() and i == 0:
+                    import os
+                    appdata = os.environ.get("APPDATA", "")
+                    if appdata:
+                        examples_dir = Path(appdata) / "HainTag" / "examples"
+                        examples_dir.mkdir(parents=True, exist_ok=True)
+                        dest = examples_dir / f"{uuid.uuid4().hex}.png"
+                        shutil.copy2(image_src, dest)
+                        entry.image_path = str(dest)
+                examples.append(entry)
+            return examples or [ExampleEntry()]
+        except Exception:
+            return [ExampleEntry()]
+
+    @staticmethod
+    def _load_default_prompts() -> list[PromptEntry]:
+        import json
+        from pathlib import Path
+        default_path = Path(__file__).parent / "resources" / "default_prompts.json"
+        if not default_path.exists():
+            return [PromptEntry()]
+        try:
+            data = json.loads(default_path.read_text(encoding="utf-8"))
+            return [PromptEntry.from_dict(d) for d in data if isinstance(d, dict)] or [PromptEntry()]
+        except Exception:
+            return [PromptEntry()]
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppState":
@@ -453,8 +496,8 @@ class AppState:
         prompts = data.get("prompts", [])
         examples = data.get("examples", [])
         widgets = data.get("widgets", [])
-        state.prompts = [PromptEntry.from_dict(item) for item in prompts] or [PromptEntry()]
-        state.examples = [ExampleEntry.from_dict(item) for item in examples]
+        state.prompts = [PromptEntry.from_dict(item) for item in prompts] if prompts else state.prompts
+        state.examples = [ExampleEntry.from_dict(item) for item in examples] if examples else state.examples
         state.widgets = [WidgetState.from_dict(item) for item in widgets] or state.widgets
         state.input_history = str(data.get("input_history", ""))
         return state

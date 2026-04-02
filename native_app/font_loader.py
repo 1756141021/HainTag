@@ -6,15 +6,16 @@ from PyQt6.QtGui import QFont, QFontDatabase
 
 
 FONT_PREFERENCE = [
+    'LXGW WenKai Screen',
     'Noto Sans CJK SC',
     'Noto Sans SC',
     'Microsoft YaHei UI',
     'Segoe UI',
-    'Quicksand',
 ]
 
 FONT_PROFILES: dict[str, list[str]] = {
     'default': ['Noto Sans CJK SC', 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI'],
+    'wenkai': ['LXGW WenKai Screen', 'Noto Sans CJK SC', 'Microsoft YaHei UI'],
     'yahei': ['Microsoft YaHei UI', 'Segoe UI'],
     'segoe': ['Segoe UI', 'Microsoft YaHei UI'],
 }
