@@ -5,6 +5,16 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.21] - 2026-04-03
+
+### Added
+- **NAI / SD 格式预设** — 新增 NAI 和 SD 两条默认提示词预设，控制输出格式（NAI 默认启用，SD 默认关闭），用户可按需切换
+
+### Changed
+- **品牌统一** — 错误报告标题、新手引导欢迎语、导出/导入对话框、错误报告文件头、更新日志弹窗全部从 "AI Tag Generator" 更名为 "HainTag"
+
+---
+
 ## [0.5.2] - 2026-04-02
 
 ### Added

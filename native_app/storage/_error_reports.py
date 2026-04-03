@@ -47,7 +47,7 @@ class ErrorReportStorage:
 
     def _format_error_report(self, report: ErrorReport) -> str:
         lines = [
-            "AI Tag Generator Error Report",
+            "HainTag Error Report",
             f"Time: {report.created_at}",
             f"Kind: {report.kind}",
         ]
@@ -67,3 +67,4 @@ class ErrorReportStorage:
             lines.append("Details:")
             lines.append(report.details.rstrip())
         return "\n".join(lines).rstrip() + "\n"
+

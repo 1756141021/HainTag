@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 _FALLBACK_STRINGS = {
     "zh-CN": {
-        "report_dialog_title": "错误报告",
+        "report_dialog_title": "HainTag 错误报告",
         "report_dialog_text": "程序发生错误",
         "report_dialog_instruction": "已生成错误报告文件，请把该文件发送给开发者。",
         "report_dialog_summary": "错误摘要：{summary}",
@@ -32,7 +32,7 @@ _FALLBACK_STRINGS = {
         "fatal_runtime_error": "程序发生未处理异常"
     },
     "en": {
-        "report_dialog_title": "Error Report",
+        "report_dialog_title": "HainTag Error Report",
         "report_dialog_text": "The application encountered an error",
         "report_dialog_instruction": "An error report has been generated. Please send this file to the developer.",
         "report_dialog_summary": "Summary: {summary}",
@@ -273,3 +273,4 @@ def _write_stderr_notice(message: str) -> None:
         sys.stderr.flush()
     except Exception:
         pass
+

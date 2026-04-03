@@ -113,7 +113,7 @@
   "language_en": "English",
   "language_zh-CN": "Chinese (Simplified)",
   "error_report_saved": "Error report saved: {path}",
-  "report_dialog_title": "Error Report",
+  "report_dialog_title": "HainTag Error Report",
   "report_dialog_text": "The application encountered an error",
   "report_dialog_instruction": "An error report has been generated. Please send this file to the developer.",
   "report_dialog_summary": "Summary: {summary}",
@@ -252,7 +252,7 @@
   "onboarding_skip": "Skip tour",
   "onboarding_next": "Next →",
   "onboarding_finish": "Get started ✓",
-  "tour_welcome_title": "Welcome to AI Tag Generator",
+  "tour_welcome_title": "Welcome to HainTag",
   "tour_welcome_desc": "An AI-powered tool for generating art tags.\nLet's walk through the key features.",
   "tour_settings_title": "⚙ Settings",
   "tour_settings_desc": "First, configure your API URL and key here.\nAny OpenAI-compatible API is supported.",
@@ -273,3 +273,4 @@
   "character_name": "Character Name",
   "library_panel": "Library"
 }
+

@@ -1953,7 +1953,7 @@ class MainWindow(QWidget):
             self,
             self._translator.t('export_config'),
             default_name,
-            'AI Tag Generator Config (*.aitg.json *.json)',
+            'HainTag Config (*.aitg.json *.json)',
         )
         if not path:
             return
@@ -1983,7 +1983,7 @@ class MainWindow(QWidget):
             self,
             self._translator.t('import_config'),
             '',
-            'AI Tag Generator Config (*.aitg.json *.json)',
+            'HainTag Config (*.aitg.json *.json)',
         )
         if not path:
             return
@@ -2264,7 +2264,7 @@ class MainWindow(QWidget):
         layout.setSpacing(8)
 
         from ._version import __version__
-        title = QLabel(f"AI Tag Generator  v{__version__}", surface)
+        title = QLabel(f"HainTag  v{__version__}", surface)
         title.setStyleSheet(f"color: {pal['text']}; font-size: {_fs('fs_13')}; font-weight: bold; background: transparent;")
         layout.addWidget(title)
 
@@ -2472,6 +2472,7 @@ class MainWindow(QWidget):
             self._worker.cancel()
             self._worker.wait(5000)
         super().closeEvent(event)
+
 
 
 
