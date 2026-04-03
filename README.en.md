@@ -79,6 +79,7 @@ Head to **[Releases](https://github.com/1756141021/HainTag/releases)** and grab 
 
 #### Appearance & UX
 
+- **Floating cards & always-on-top** — Drag any card out of the main window into an independent floating panel; pin the main window on top — great for multi-monitor setups and side-by-side workflows
 - **Dark / light themes** — Frosted glass aesthetic with adjustable card transparency
 - **Custom background** — Pick an image; dominant colors are extracted to generate a matching palette
 - **Multilingual** — Chinese / English
