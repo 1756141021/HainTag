@@ -13,6 +13,8 @@
 
 AI 绘画 TAG 生成 · 管理 · 工作流——一站式 Windows 桌面工具
 
+如果觉得好用，请推荐给你的朋友们，顺手点个 ⭐ Star 就是最大的支持！
+
 [海茵的介绍 ☽](README.hein.md) · [English](README.en.md)
 
 </div>

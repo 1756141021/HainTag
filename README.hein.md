@@ -10,6 +10,8 @@
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078d4.svg)]()
 [![Release](https://img.shields.io/github/v/release/1756141021/HainTag?color=green)](https://github.com/1756141021/HainTag/releases)
 
+如果觉得好用，推荐给朋友们吧，顺手点个 ⭐ 我会很开心的……真的。
+
 [正式介绍](README.md) · [English](README.en.md)
 
 </div>
