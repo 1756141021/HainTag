@@ -54,5 +54,21 @@
     "order": 100,
     "enabled": true,
     "content": "---"
+  },
+  {
+    "name": "NAI",
+    "role": "system",
+    "depth": 0,
+    "order": 3,
+    "enabled": true,
+    "content": "---\n默认输出输出NAI格式。如果用户有其他需求，以用户需求为准。\n---"
+  },
+  {
+    "name": "SD",
+    "role": "system",
+    "depth": 0,
+    "order": 3,
+    "enabled": false,
+    "content": "---\n默认输出输出SD格式，最高权重不应超过1.4，不然会鬼图。如果用户有其他需求，以用户需求为准。\n---"
   }
 ]
