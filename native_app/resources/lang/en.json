@@ -259,7 +259,7 @@
   "tour_workbench_title": "Workbench",
   "tour_workbench_desc": "Generated TAGs appear on top, type your description below.\nPress Ctrl+Enter to send.",
   "tour_prompts_title": "Prompt Manager",
-  "tour_prompts_desc": "Configure system prompts to control AI output format and style.\nSupports multiple prompts with adjustable order and depth.",
+  "tour_prompts_desc": "Configure system prompts to control AI output format and style.\nBuilt-in NAI / SD format presets — enable one to switch output format.\nSupports multiple prompts with adjustable order and depth.",
   "tour_library_title": "◂ Artist / OC Library",
   "tour_library_desc": "Click the side button to open the library.\nStore artist LoRA triggers and OC character presets.",
   "tour_shortcuts_title": "? Shortcuts",

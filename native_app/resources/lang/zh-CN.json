@@ -259,7 +259,7 @@
   "tour_workbench_title": "工作台",
   "tour_workbench_desc": "上方显示生成的 TAG 结果，下方输入画面描述。\n输入描述后按 Ctrl+Enter 发送。",
   "tour_prompts_title": "提示词管理",
-  "tour_prompts_desc": "在这里配置系统提示词，控制 AI 的输出格式和风格。\n支持多条提示词，可调整顺序和深度。",
+  "tour_prompts_desc": "在这里配置系统提示词，控制 AI 的输出格式和风格。\n内置 NAI / SD 格式预设，启用其中一个即可切换输出格式。\n支持多条提示词，可调整顺序和深度。",
   "tour_library_title": "◂ 画师库 / OC 库",
   "tour_library_desc": "点击右侧按钮打开资料库。\n存储画师 LoRA 触发词和 OC 角色设定，生成时自动引用。",
   "tour_shortcuts_title": "? 快捷键",
