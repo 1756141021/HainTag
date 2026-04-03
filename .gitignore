@@ -36,6 +36,13 @@ text/
 wiki_viva_la_vita_Word*/
 AIGenerateHistory/
 
+# Internal dev docs (not for public repo)
+CLAUDE.md
+DEV_NOTES.md
+DEVELOPMENT_MEMORY.md
+AITagGenerator.spec
+danbooru_all_2.csv
+
 # One-off files
 1.html
 1111.sln
