@@ -13,6 +13,8 @@
 
 A Windows desktop tool for AI art tag generation, editing, and workflow management.
 
+If you find it useful, share it with your friends and give it a ⭐ Star — it means a lot!
+
 [简体中文](README.md) · [About Hein ☽](README.hein.md)
 
 </div>
