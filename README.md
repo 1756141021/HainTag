@@ -8,7 +8,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078d4.svg)]()
-[![Version](https://img.shields.io/badge/Version-0.5.2-green.svg)](https://github.com/1756141021/HainTag/releases)
+[![Release](https://img.shields.io/github/v/release/1756141021/HainTag?color=green)](https://github.com/1756141021/HainTag/releases)
+[![Downloads](https://img.shields.io/github/downloads/1756141021/HainTag/total?color=orange)](https://github.com/1756141021/HainTag/releases)
 
 AI 绘画 TAG 生成 · 管理 · 工作流——一站式 Windows 桌面工具
 
