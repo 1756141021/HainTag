@@ -9,7 +9,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078d4.svg)]()
 [![Release](https://img.shields.io/github/v/release/1756141021/HainTag?color=green)](https://github.com/1756141021/HainTag/releases)
-[![Downloads](https://img.shields.io/github/downloads/1756141021/HainTag/total?color=orange)](https://github.com/1756141021/HainTag/releases)
+[![Downloads](https://img.shields.io/badge/Downloads-Release-orange)](https://github.com/1756141021/HainTag/releases)
 
 A Windows desktop tool for AI art tag generation, editing, and workflow management.
 
