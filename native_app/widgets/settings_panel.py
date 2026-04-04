@@ -241,6 +241,13 @@ class SettingsPanel(QWidget):
         self.import_button.clicked.connect(self._show_import_menu)
         io_row.addWidget(self.import_button)
         self.body_layout.addLayout(io_row)
+
+        # Check for Updates button
+        self.check_update_button = QPushButton(parent)
+        self.check_update_button.setObjectName('SecondaryButton')
+        self.check_update_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.body_layout.addWidget(self.check_update_button)
+
         self.body_layout.addStretch(1)
 
         self._slider_meta = {
@@ -491,6 +498,7 @@ class SettingsPanel(QWidget):
         self.markers_label.setToolTip(self._translator.t('tip_tag_markers'))
         self.export_button.setText(self._translator.t('export'))
         self.import_button.setText(self._translator.t('import'))
+        self.check_update_button.setText(self._translator.t('check_update'))
 
         if not self.summary_prompt_edit.toPlainText().strip():
             self.summary_prompt_edit.setPlainText(self._translator.t('summary_default'))

@@ -172,6 +172,23 @@ QWidget {{
     color: {accent_text};
     border-color: {accent};
 }}
+#HistTabBtn {{
+    background: rgba(28, 28, 32, 0.70);
+    color: {text_dim};
+    border: 1px solid {line_strong};
+    border-left: none;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+    font-size: {fs_9};
+    padding: 0px;
+}}
+#HistTabBtn:hover {{
+    background: rgba(38, 38, 44, 0.95);
+    color: {accent_text};
+    border-color: {accent};
+}}
 
 #TitleBar {{
     background: {bg_titlebar};

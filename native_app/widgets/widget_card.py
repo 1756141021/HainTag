@@ -12,6 +12,7 @@ from .common import compute_resized_rect
 
 class WidgetCard(QFrame):
     geometry_edited = pyqtSignal(str)
+    geometry_live = pyqtSignal()  # emitted on every move/resize (during drag, not just release)
     interaction_finished = pyqtSignal(str)
     close_requested = pyqtSignal(str)  # widget_id — request to hide/dock this card
     floated = pyqtSignal(str)  # widget_id — card became a floating window
@@ -309,6 +310,10 @@ class WidgetCard(QFrame):
         y = max(bounds.top(), min(rect.y(), bounds.bottom() - height + 1))
         self.setGeometry(x, y, width, height)
 
+    def moveEvent(self, event) -> None:
+        super().moveEvent(event)
+        self.geometry_live.emit()
+
     def resizeEvent(self, event) -> None:
         self._content_host.setGeometry(0, 0, self.width(), self.height())
         self._drag_strip.setGeometry(0, 0, self.width(), self._drag_strip_height)
@@ -335,6 +340,7 @@ class WidgetCard(QFrame):
         self._resize_handles["bottom_right"].setGeometry(self.width() - corner, self.height() - corner, corner, corner)
 
         self._resize_handle.move(self.width() - self._resize_handle.width(), self.height() - self._resize_handle.height())
+        self.geometry_live.emit()
 
         self._drag_strip.raise_()
         for handle in self._resize_handles.values():

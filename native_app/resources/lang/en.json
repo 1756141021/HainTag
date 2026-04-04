@@ -271,6 +271,14 @@
   "artist_name": "Artist Name",
   "artist_string": "LoRA / Trigger Words",
   "character_name": "Character Name",
-  "library_panel": "Library"
+  "library_panel": "Library",
+  "update_title": "Check for Updates",
+  "update_found": "New version available",
+  "update_now": "Update Now",
+  "update_skip": "Skip This Version",
+  "update_later": "Remind Me Later",
+  "update_up_to_date": "You're up to date",
+  "update_checking": "Checking for updates…",
+  "check_update": "Check for Updates"
 }
 

@@ -5,6 +5,22 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-04
+
+### Added
+- **历史记录侧边栏** — 工作台右侧可收缩侧边栏，替代原独立历史卡片。◁ 按钮触发，200ms 动画展开/收缩，不影响工作台布局。条目可折叠/展开（懒创建），支持复制输出、复制输入、填充到当前输出。浮动窗口模式下侧边栏跟随
+- **自动更新检查** — 启动 3 秒后后台查询 GitHub Releases API，发现新版弹窗显示 changelog，三个按钮：立即更新（打开浏览器下载）/ 跳过此版本 / 下次提醒。设置面板底部新增"检查更新"按钮可手动触发
+- **HistoryEntry 增加 nochar_text** — 历史记录同时保存完整 TAG 和无角色 TAG，向后兼容
+
+### Fixed
+- **输入保留** — API 报错（HTTP 502 等）或取消生成时，输入框内容自动恢复，不再丢失
+- **错误显示** — URL 配置错误（缺少 http://）不再弹出错误报告弹窗，改为在 TAG 输出区显示 `[Error]` 并自动打开设置面板
+
+### Changed
+- **WidgetCard 新增 geometry_live 信号** — moveEvent/resizeEvent 中触发，拖拽过程中每帧同步，供侧边栏按钮实时跟随
+
+---
+
 ## [0.5.21] - 2026-04-03
 
 ### Added
