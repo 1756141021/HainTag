@@ -168,6 +168,7 @@ class OCEntry:
 class HistoryEntry:
     input_text: str = ""
     output_text: str = ""
+    nochar_text: str = ""
     timestamp: str = ""
     model: str = ""
 
@@ -176,6 +177,7 @@ class HistoryEntry:
         return cls(
             input_text=str(data.get("input_text", "")),
             output_text=str(data.get("output_text", "")),
+            nochar_text=str(data.get("nochar_text", "")),
             timestamp=str(data.get("timestamp", "")),
             model=str(data.get("model", "")),
         )
@@ -333,6 +335,8 @@ class AppSettings:
     default_example_depth: int = 4
     default_oc_order: int = 77
     default_oc_depth: int = 4
+    # Update
+    skipped_version: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
@@ -379,6 +383,7 @@ class AppSettings:
             default_example_depth=clamp_int(data.get("default_example_depth", 4), 4, 0, 999),
             default_oc_order=clamp_int(data.get("default_oc_order", 77), 77, 0, 9999),
             default_oc_depth=clamp_int(data.get("default_oc_depth", 4), 4, 0, 999),
+            skipped_version=str(data.get("skipped_version", "") or ""),
         )
 
     def to_dict(self) -> dict[str, Any]:

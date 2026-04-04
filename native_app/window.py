@@ -262,6 +262,7 @@ class MainWindow(QWidget):
         self.settings_panel.config_export_requested.connect(self._export_config_bundle)
         self.settings_panel.config_import_requested.connect(self._import_config_bundle)
         self.settings_panel.fetch_models_requested.connect(self._fetch_models)
+        self.settings_panel.check_update_button.clicked.connect(self.check_update_manual)
 
         self.dock_panel = DockPanel(self.content_host)
         self.dock_panel.set_container_rect_provider(self._usable_content_global_rect)
@@ -326,19 +327,35 @@ class MainWindow(QWidget):
         self.metadata_destroyer_card.hide()
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
 
-        # History panel
-        from .widgets.history_panel import HistoryPanel
-        self.history_card = WidgetCard('widget-history', min_size=QSize(380, 320), parent=self.workspace)
-        self._history_panel = HistoryPanel(self._translator, self._storage, self.history_card)
-        self._history_panel.entry_selected.connect(self._on_history_entry_selected)
-        self.history_card.set_content(self._history_panel)
-        self.workspace.add_card(self.history_card)
-        self.history_card.hide()
-        self._label_card(self.history_card, 'history_panel')
+        # History sidebar (right of main_card)
+        from .widgets.history_sidebar import HistorySidebar
+        self._history_sidebar = HistorySidebar(self._translator, self._storage, self.workspace)
+        self._history_sidebar.hide()
+        self._history_sidebar.entry_fill_requested.connect(self._on_history_fill)
+        self._history_sidebar.width_changed.connect(lambda _: self._position_history_sidebar())
+        self._history_open = False
+
+        # History toggle button — workspace child, positioned at main_card's right edge
+        self._history_tab_btn = QPushButton("◁", self.workspace)
+        self._history_tab_btn.setObjectName("HistTabBtn")
+        self._history_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._history_tab_btn.setFixedSize(16, 80)
+        self._history_tab_btn.clicked.connect(self._toggle_history_sidebar)
+        self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
+
+        # Follow main_card on every move/resize (fires during drag, not just on release)
+        self.main_card.geometry_live.connect(self._position_history_btn)
+        self.main_card.geometry_live.connect(self._position_history_sidebar)
+
+
         # Load existing history
         entries = self._storage.load_history()
         if entries:
-            self._history_panel.set_entries(entries)
+            self._history_sidebar.set_entries(entries)
+
+        # Track main_card float/unfloat — reparent history button
+        self.main_card.floated.connect(lambda _: self._reparent_history_btn_to_card())
+        self.main_card.unfloated.connect(lambda _: self._reparent_history_btn_to_workspace())
 
         # Workspace drag-and-drop → open metadata viewer
         self.workspace.image_dropped.connect(self._on_workspace_image_dropped)
@@ -552,10 +569,13 @@ class MainWindow(QWidget):
             self.showMaximized()
             self._apply_native_window_style()
         QTimer.singleShot(100, self._reposition_swap_btn)
+        QTimer.singleShot(100, self._position_history_btn)
         if not self._has_persisted_state:
             QTimer.singleShot(800, self._start_onboarding)
         else:
             self._register_hints()
+        # Auto update check (delayed 3s to not block startup)
+        QTimer.singleShot(3000, self._check_update_auto)
 
     def _restore_widget_layouts(self) -> None:
         saved_widget_states = {item.widget_id: item for item in self._state.widgets}
@@ -708,6 +728,8 @@ class MainWindow(QWidget):
 
     def _dock_card(self, widget_id: str) -> None:
         self.workspace.hide_card(widget_id)
+        if widget_id == 'widget-main':
+            self._on_main_card_visibility_changed()
         self._refresh_dock_items()
         self._schedule_save()
 
@@ -717,6 +739,8 @@ class MainWindow(QWidget):
             return
         card.show()
         self.workspace.restore_card(card, drop_point=global_pos)
+        if widget_id == 'widget-main':
+            self._on_main_card_visibility_changed()
         self._refresh_dock_items()
         self._schedule_save()
 
@@ -1045,6 +1069,7 @@ class MainWindow(QWidget):
         vl.raise_()
         # Position library tab button and panel
         self._position_library()
+        self._position_history_sidebar()
         self.dock_panel.setGeometry(dock_rect)
         self.dock_panel.raise_()
         self._update_dock_preview_geometry(content_rect)
@@ -1078,7 +1103,7 @@ class MainWindow(QWidget):
             'add_example': (t('add_example'), self._add_example_card),
             'metadata_viewer': (t('metadata_viewer'), self._toggle_metadata_viewer),
             'metadata_destroyer': (t('metadata_destroyer'), self._toggle_metadata_destroyer),
-            'history': (t('history_panel'), self._toggle_history_panel),
+            'history': (t('history_panel'), self._toggle_history_sidebar),
             'image_manager': (t('image_manager'), self._open_image_manager),
             'shortcuts': (t('shortcuts'), self._show_shortcuts_panel),
             'clear': (t('clear_workspace'), self._clear_workspace),
@@ -1599,8 +1624,8 @@ class MainWindow(QWidget):
         # Notify image manager to re-apply theme
         if hasattr(self, '_image_manager') and self._image_manager is not None:
             self._image_manager.apply_theme()
-        if hasattr(self, '_history_panel') and self._history_panel is not None:
-            self._history_panel.apply_theme()
+        if hasattr(self, '_history_sidebar') and self._history_sidebar is not None:
+            self._history_sidebar.apply_theme()
         # Refresh card title colors
         for card in self.workspace.all_cards():
             card.apply_theme()
@@ -1760,18 +1785,37 @@ class MainWindow(QWidget):
         dialog.exec()
 
     def _on_worker_error(self, message: str, status_code: int, details: str) -> None:
-        action = 'summary' if self._current_mode == 'summary' else 'send'
-        self._report_issue(
-            'request_error',
-            message,
-            action=action,
-            details=details,
-            open_settings=status_code in (401, 403),
-            extra_context={'status_code': status_code},
-        )
+        if self._pending_history_input and self._current_mode == 'chat':
+            self.input_widget.set_text(self._pending_history_input)
+            self._pending_history_input = ""
+            self._pending_history_model = ""
+            self._update_token_estimate()
+        is_config_error = status_code == 0
+        error_text = f"[Error] {message}"
+        self.output_widget.append_full_text(error_text)
+        if is_config_error:
+            # URL/connection errors — show in output only, open settings
+            if not self.settings_panel.is_open():
+                self._set_settings_open(True)
+        else:
+            # HTTP errors (401, 502, etc.) — also generate error report
+            action = 'summary' if self._current_mode == 'summary' else 'send'
+            self._report_issue(
+                'request_error',
+                message,
+                action=action,
+                details=details,
+                open_settings=status_code in (401, 403),
+                extra_context={'status_code': status_code},
+            )
         self._finish_worker_state()
 
     def _on_worker_cancelled(self) -> None:
+        if self._pending_history_input and self._current_mode == 'chat':
+            self.input_widget.set_text(self._pending_history_input)
+            self._pending_history_input = ""
+            self._pending_history_model = ""
+            self._update_token_estimate()
         self._finish_worker_state()
 
     def _on_worker_finished(self) -> None:
@@ -1785,16 +1829,18 @@ class MainWindow(QWidget):
         # Capture to history
         if self._current_mode == 'chat' and self._pending_history_input:
             output_text = self.output_widget.full_editor.toPlainText().strip()
+            nochar_text = self.output_widget.nochar_editor.toPlainText().strip()
             if output_text:
                 from datetime import datetime
                 from .models import HistoryEntry
                 entry = HistoryEntry(
                     input_text=self._pending_history_input,
                     output_text=output_text,
+                    nochar_text=nochar_text,
                     timestamp=datetime.now().isoformat(timespec='seconds'),
                     model=self._pending_history_model,
                 )
-                self._history_panel.add_entry(entry)
+                self._history_sidebar.add_entry(entry)
             self._pending_history_input = ""
             self._pending_history_model = ""
         self._finish_worker_state()
@@ -2026,7 +2072,8 @@ class MainWindow(QWidget):
         self._label_card(self.main_card, 'widget_main')
         self._label_card(self.metadata_viewer_card, 'widget_metadata_viewer')
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
-        self._label_card(self.history_card, 'history_panel')
+        self._history_sidebar.retranslate_ui()
+        self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
         for index, widget_id in enumerate(sorted(self._example_cards), start=1):
             label = f"{self._translator.t('example')} {index}"
             self._card_labels[widget_id] = label
@@ -2178,22 +2225,106 @@ class MainWindow(QWidget):
         h.register(self._lib_tab_btn, "hint_library",
                    "hint_library", position="left", delay_ms=6000)
 
-    def _on_history_entry_selected(self, output_text: str) -> None:
+    def _on_history_fill(self, output_text: str, nochar_text: str) -> None:
         self.output_widget.set_full_tags(output_text)
+        if nochar_text:
+            self.output_widget.nochar_editor.setPlainText(nochar_text)
         self.main_card.show()
         self.main_card.raise_()
 
-    def _toggle_history_panel(self) -> None:
-        card = self.history_card
-        if card.isVisible():
-            card.hide()
+    def _toggle_history_sidebar(self) -> None:
+        self._history_open = not self._history_open
+        if self._history_open:
+            self._history_sidebar.apply_theme()
+            # If card is floating, sidebar must also be a top-level window
+            if self.main_card._floating:
+                self._history_sidebar.setParent(None)
+                self._history_sidebar.setWindowFlags(
+                    Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
+                    Qt.WindowType.WindowStaysOnTopHint
+                )
+            self._history_sidebar.animate_show()
+            self._history_tab_btn.setText("▷")
         else:
-            card.show()
-            if card.x() == 0 and card.y() == 0:
-                card.setGeometry(self.workspace.find_free_position(QSize(400, 400), exclude=card))
-            self.workspace.resolve_overlap(card)
-        self._refresh_dock_items()
-        self._schedule_save()
+            self._history_sidebar.animate_hide()
+            self._history_tab_btn.setText("◁")
+            # Return sidebar to workspace if it was floating
+            if self._history_sidebar.parent() is None:
+                QTimer.singleShot(250, lambda: self._history_sidebar.setParent(self.workspace))
+        self._position_history_sidebar()
+
+    def _position_history_btn(self) -> None:
+        """Position the history tab button just outside the right edge of main_card."""
+        card = self.main_card
+        btn = self._history_tab_btn
+        if not card.isVisible():
+            btn.hide()
+            if self._history_open:
+                self._history_sidebar.hide()
+            return
+        btn.show()
+        if btn.parent() is card:
+            # Floating mode: button is card's child, inside right edge
+            x = card.width() - btn.width()
+            y = (card.height() - btn.height()) // 2
+        else:
+            # Workspace mode: button is workspace's child, position in workspace coords
+            x = card.x() + card.width()
+            y = card.y() + (card.height() - btn.height()) // 2
+        btn.move(x, y)
+        btn.raise_()
+
+    def _reparent_history_btn_to_card(self) -> None:
+        """Move history button to be a child of main_card (for floating mode)."""
+        btn = self._history_tab_btn
+        btn.setParent(self.main_card)
+        btn.show()
+        self._position_history_btn()
+        # Also reparent sidebar as independent window next to the card
+        if self._history_open:
+            self._history_sidebar.setParent(None)
+            self._history_sidebar.setWindowFlags(
+                Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint
+            )
+            self._history_sidebar.show()
+            self._position_history_sidebar()
+
+    def _reparent_history_btn_to_workspace(self) -> None:
+        """Move history button back to workspace (when card returns from floating)."""
+        btn = self._history_tab_btn
+        btn.setParent(self.workspace)
+        btn.show()
+        # Return sidebar to workspace
+        if self._history_open:
+            self._history_sidebar.setParent(self.workspace)
+            self._history_sidebar.show()
+        QTimer.singleShot(50, self._position_history_btn)
+        QTimer.singleShot(50, self._position_history_sidebar)
+
+    def _on_main_card_visibility_changed(self) -> None:
+        """Called when main_card is docked/restored."""
+        QTimer.singleShot(50, self._position_history_btn)
+
+    def _position_history_sidebar(self) -> None:
+        """Position the history sidebar next to main_card."""
+        if not self._history_open:
+            return
+        card = self.main_card
+        btn = self._history_tab_btn
+        sidebar = self._history_sidebar
+        sidebar.setFixedHeight(card.height())
+
+        if card._floating:
+            # Floating: sidebar is a top-level window, use global coords
+            card_global = card.mapToGlobal(card.rect().topRight())
+            sidebar.move(card_global.x(), card_global.y())
+        else:
+            # Workspace: sidebar is a workspace child
+            sidebar_x = card.x() + card.width() + btn.width()
+            sidebar_y = card.y()
+            sidebar.move(sidebar_x, sidebar_y)
+        sidebar.raise_()
 
     def _show_menu_order_dialog_and_dismiss_hint(self) -> None:
         self._hint_manager.dismiss("hint_customize_menu")
@@ -2472,6 +2603,51 @@ class MainWindow(QWidget):
             self._worker.cancel()
             self._worker.wait(5000)
         super().closeEvent(event)
+
+    # ── Auto Update ──
+
+    def _check_update_auto(self) -> None:
+        """Auto-check on startup (respects skipped_version)."""
+        settings = self.settings_panel.settings()
+        from ._version import __version__
+        from .updater import UpdateChecker
+        self._update_checker = UpdateChecker(__version__, self)
+        self._update_checker.update_available.connect(
+            lambda ver, cl, url: self._show_update_dialog(ver, cl, url, auto=True)
+        )
+        # no_update and check_error: silent on auto
+        self._update_checker.start()
+
+    def check_update_manual(self) -> None:
+        """Manual check from settings panel (ignores skipped_version)."""
+        from ._version import __version__
+        from .updater import UpdateChecker
+        self._update_checker = UpdateChecker(__version__, self)
+        self._update_checker.update_available.connect(
+            lambda ver, cl, url: self._show_update_dialog(ver, cl, url, auto=False)
+        )
+        self._update_checker.no_update.connect(self._show_no_update)
+        self._update_checker.start()
+
+    def _show_update_dialog(self, version: str, changelog: str,
+                            download_url: str, auto: bool) -> None:
+        settings = self.settings_panel.settings()
+        from .updater import _parse_version
+        if auto and settings.skipped_version:
+            if _parse_version(version) <= _parse_version(settings.skipped_version):
+                return
+        from .updater import UpdateDialog
+        dialog = UpdateDialog(version, changelog, download_url, self._translator, self)
+        dialog.exec()
+        if dialog.result_action == UpdateDialog.SKIP:
+            self._state.settings.skipped_version = version.lstrip("vV")
+            self._schedule_save()
+
+    def _show_no_update(self) -> None:
+        from ._version import __version__
+        from .updater import NoUpdateDialog
+        dialog = NoUpdateDialog(__version__, self._translator, self)
+        dialog.exec()
 
 
 
