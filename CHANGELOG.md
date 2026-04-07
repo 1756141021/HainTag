@@ -5,6 +5,20 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-04
+
+### Added
+- **文本区域拖拽调整高度** — Metadata 查看器、编辑器、例图卡片的文本框底部新增 6px 拖拽手柄，可拖动调整高度
+- **销毁文本模板系统** — Metadata 销毁器标题栏新增模板下拉框，支持切换/新增/编辑/删除预设销毁文本，右键下拉框或从右键菜单"编辑预设文本"打开编辑器弹窗
+- **编辑模式子菜单** — Metadata 销毁器右键"编辑模式"拆为"编辑单个图片"和"编辑预设文本"两个选项
+
+### Fixed
+- **浮动窗口边缘保护** — 浮动卡片拖拽时限制在屏幕可用区域内，标题栏不会跑出屏幕外
+- **浮动窗口 resize** — 浮动模式下卡片可正常拖拽调整大小（之前 bounds 为空导致无法放大）
+- **销毁模板持久化** — destroy_templates 和 skipped_version 在 _build_app_state 中正确保留，不再被设置面板重建覆盖
+
+---
+
 ## [0.6.0] - 2026-04-04
 
 ### Added

@@ -279,6 +279,8 @@
   "update_later": "Remind Me Later",
   "update_up_to_date": "You're up to date",
   "update_checking": "Checking for updates…",
-  "check_update": "Check for Updates"
+  "check_update": "Check for Updates",
+  "metadata_edit_single": "Edit Single Image",
+  "metadata_edit_preset": "Edit Preset Text"
 }
 

@@ -64,18 +64,19 @@ class MetadataWriter:
             # Write IEND
             self._write_chunk(f, b"IEND", b"")
 
-    def destroy(self, src: str, dst: str) -> None:
+    def destroy(self, src: str, dst: str, text: str | None = None) -> None:
         """Destroy metadata by overwriting all text chunks with garbage.
 
         Writes in standard A1111 format so tools display: positive prompt
         = garbage text, negative = garbage text, Steps: 0.
         IDAT is byte-for-byte identical to the source.
         """
+        fill = text if text is not None else _DESTROY_TEXT
         fake_params = (
-            f"{_DESTROY_TEXT}\n"
-            f"Negative prompt: {_DESTROY_TEXT}\n"
-            f"Steps: 0, Sampler: {_DESTROY_TEXT}, CFG scale: 0, "
-            f"Seed: 0, Size: 0x0, Model: {_DESTROY_TEXT}"
+            f"{fill}\n"
+            f"Negative prompt: {fill}\n"
+            f"Steps: 0, Sampler: {fill}, CFG scale: 0, "
+            f"Seed: 0, Size: 0x0, Model: {fill}"
         )
         self.write_chunks(src, dst, {"parameters": fake_params})
 
