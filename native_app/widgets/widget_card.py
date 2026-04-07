@@ -45,6 +45,7 @@ class WidgetCard(QFrame):
         self._drag_strip.setObjectName("WidgetDragStrip")
         self._drag_strip.setCursor(Qt.CursorShape.OpenHandCursor)
         self._drag_strip.setMouseTracking(True)
+        self._drag_strip.setAcceptDrops(True)  # block drops from reaching content below
 
         self._grip = QPushButton("⠇", self._drag_strip)
         self._grip.setObjectName("WidgetGrip")
@@ -229,7 +230,13 @@ class WidgetCard(QFrame):
         return False
 
     def _resized_rect(self, origin: QRect, direction: str, delta: QPoint) -> QRect:
-        bounds = self.parentWidget().rect() if self.parentWidget() is not None else QRect(origin)
+        if self.parentWidget() is not None and not self._floating:
+            bounds = self.parentWidget().rect()
+        else:
+            # Floating: use screen geometry as bounds
+            from PyQt6.QtGui import QGuiApplication
+            screen = QGuiApplication.screenAt(origin.center())
+            bounds = screen.availableGeometry() if screen else QRect(0, 0, 3840, 2160)
         return compute_resized_rect(origin, direction, delta, bounds, self._min_size.width(), self._min_size.height())
 
     def _close_action(self) -> None:
@@ -296,11 +303,25 @@ class WidgetCard(QFrame):
         self.setWindowFlags(Qt.WindowType.Widget)
         self.resize(size)
         self.show()
+        # Re-raise drag strip and resize handles after reparent (z-order resets)
+        self._drag_strip.raise_()
+        for handle in self._resize_handles.values():
+            handle.raise_()
+        self._resize_handle.raise_()
         self._update_pin_style()
         self.unfloated.emit(self.widget_id)
 
     def _apply_geometry(self, rect: QRect) -> None:
         if self.parentWidget() is None or self._floating:
+            from PyQt6.QtGui import QGuiApplication
+            screen = QGuiApplication.screenAt(rect.center())
+            if screen:
+                avail = screen.availableGeometry()
+                grab = self._drag_strip_height
+                rect.moveLeft(max(avail.left() - rect.width() + grab,
+                                  min(rect.x(), avail.right() - grab)))
+                rect.moveTop(max(avail.top(),
+                                  min(rect.y(), avail.bottom() - grab)))
             self.setGeometry(rect)
             return
         bounds = self.parentWidget().rect()

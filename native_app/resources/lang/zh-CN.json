@@ -279,6 +279,8 @@
   "update_later": "下次提醒",
   "update_up_to_date": "已是最新版本",
   "update_checking": "正在检查更新…",
-  "check_update": "检查更新"
+  "check_update": "检查更新",
+  "metadata_edit_single": "编辑单个图片",
+  "metadata_edit_preset": "编辑预设文本"
 }
 

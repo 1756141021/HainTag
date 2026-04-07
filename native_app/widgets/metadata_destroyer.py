@@ -84,16 +84,17 @@ class _DraggableImageLabel(QLabel):
 class _DestroyWorker(QThread):
     finished = pyqtSignal(str, str, str)
 
-    def __init__(self, writer: MetadataWriter, src: str, dst: str) -> None:
+    def __init__(self, writer: MetadataWriter, src: str, dst: str, destroy_text: str | None = None) -> None:
         super().__init__()
         self._writer = writer
         self._src = src
         self._dst = dst
+        self._destroy_text = destroy_text
 
     def run(self) -> None:
         try:
             if Path(self._src).suffix.lower() == ".png":
-                self._writer.destroy(self._src, self._dst)
+                self._writer.destroy(self._src, self._dst, text=self._destroy_text)
             else:
                 shutil.copy2(self._src, self._dst)
             self.finished.emit(self._src, self._dst, "")
@@ -156,6 +157,7 @@ class MetadataDestroyerWidget(QWidget):
 
     changed = pyqtSignal()
     error_occurred = pyqtSignal(str, str)
+    _edit_destroy_preset_requested = pyqtSignal()
 
     def __init__(self, translator: Translator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -166,6 +168,7 @@ class MetadataDestroyerWidget(QWidget):
         self._writer = MetadataWriter()
         self._workers: list[_DestroyWorker] = []
         self._temp_dir = tempfile.mkdtemp(prefix="aitag_destroy_")
+        self._destroy_text: str | None = None  # None = use default
         self._state = "empty"  # "empty" | "single" | "batch"
         self._edit_mode = False  # False=destroy, True=edit
         self._single_src: str = ""
@@ -297,7 +300,7 @@ class MetadataDestroyerWidget(QWidget):
         self._batch_header.setVisible(False)
         self._scroll.setVisible(False)
 
-        worker = _DestroyWorker(self._writer, path, dst)
+        worker = _DestroyWorker(self._writer, path, dst, self._destroy_text)
         worker.finished.connect(self._on_single_done)
         self._workers.append(worker)
         worker.start()
@@ -330,8 +333,11 @@ class MetadataDestroyerWidget(QWidget):
         menu.addSeparator()
         if self._edit_mode:
             mode_action = menu.addAction(self._translator.t("metadata_destroy_mode"))
+            edit_preset_action = None
         else:
-            mode_action = menu.addAction(self._translator.t("metadata_edit_mode"))
+            edit_sub = menu.addMenu(self._translator.t("metadata_edit_mode"))
+            mode_action = edit_sub.addAction(self._translator.t("metadata_edit_single"))
+            edit_preset_action = edit_sub.addAction(self._translator.t("metadata_edit_preset"))
 
         action = menu.exec(self._preview_label.mapToGlobal(pos))
         if action is None:
@@ -348,14 +354,19 @@ class MetadataDestroyerWidget(QWidget):
             mime.setUrls([QUrl.fromLocalFile(self._single_dst)])
             QApplication.clipboard().setMimeData(mime)
         elif action == mode_action:
-            self._edit_mode = not self._edit_mode
-            if self._edit_mode and self._single_src:
-                self._enter_edit_mode()
-            else:
-                # Switch back to destroy: re-process the source
+            if self._edit_mode:
+                # Switch back to destroy mode
+                self._edit_mode = False
                 if self._single_src:
                     self._back_to_empty()
                     self._start_single(self._single_src)
+            else:
+                # Enter edit mode for single image
+                self._edit_mode = True
+                if self._single_src:
+                    self._enter_edit_mode()
+        elif action == edit_preset_action:
+            self._edit_destroy_preset_requested.emit()
 
     def _enter_edit_mode(self) -> None:
         """Show editable metadata fields for the source image."""
@@ -380,14 +391,16 @@ class MetadataDestroyerWidget(QWidget):
 
         from PyQt6.QtWidgets import QTextEdit
         from ..ui_tokens import CLS_METADATA_TEXT
+        from .resize_handle import wrap_with_resize_handle
         # Positive prompt
         self._edit_positive = QTextEdit(self._results_content)
         self._edit_positive.setProperty("class", CLS_METADATA_TEXT)
         self._edit_positive.setPlainText(meta.positive_prompt)
         self._edit_positive.setMaximumHeight(120)
+        pos_container = wrap_with_resize_handle(self._edit_positive, self._results_content)
         pos_section = CollapsibleSection(
             self._translator.t("metadata_positive"),
-            self._edit_positive, parent=self._results_content,
+            pos_container, parent=self._results_content,
         )
         self._results_layout.insertWidget(0, pos_section)
 
@@ -396,9 +409,10 @@ class MetadataDestroyerWidget(QWidget):
         self._edit_negative.setProperty("class", CLS_METADATA_TEXT)
         self._edit_negative.setPlainText(meta.negative_prompt)
         self._edit_negative.setMaximumHeight(120)
+        neg_container = wrap_with_resize_handle(self._edit_negative, self._results_content)
         neg_section = CollapsibleSection(
             self._translator.t("metadata_negative"),
-            self._edit_negative, parent=self._results_content,
+            neg_container, parent=self._results_content,
         )
         self._results_layout.insertWidget(1, neg_section)
 
@@ -434,7 +448,7 @@ class MetadataDestroyerWidget(QWidget):
             dst = os.path.join(self._temp_dir, f"destroyed_{fname}")
             busy = QLabel(f"\u27f3 {fname}...", self._results_content)
             self._results_layout.insertWidget(self._results_layout.count() - 1, busy)
-            worker = _DestroyWorker(self._writer, path, dst)
+            worker = _DestroyWorker(self._writer, path, dst, self._destroy_text)
             worker.finished.connect(
                 lambda s, d, e, lbl=busy: self._on_batch_done(s, d, e, lbl)
             )

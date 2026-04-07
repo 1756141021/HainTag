@@ -337,6 +337,9 @@ class AppSettings:
     default_oc_depth: int = 4
     # Update
     skipped_version: str = ""
+    # Destroy templates
+    destroy_templates: list[dict[str, str]] | None = None
+    active_destroy_template: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
@@ -384,6 +387,8 @@ class AppSettings:
             default_oc_order=clamp_int(data.get("default_oc_order", 77), 77, 0, 9999),
             default_oc_depth=clamp_int(data.get("default_oc_depth", 4), 4, 0, 999),
             skipped_version=str(data.get("skipped_version", "") or ""),
+            destroy_templates=data.get("destroy_templates"),
+            active_destroy_template=str(data.get("active_destroy_template", "") or ""),
         )
 
     def to_dict(self) -> dict[str, Any]:

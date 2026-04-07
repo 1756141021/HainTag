@@ -323,14 +323,15 @@ class MetadataViewerWidget(QWidget):
                 w.setParent(None)
                 w.deleteLater()
 
-    def _make_text_display(self, text: str) -> QTextEdit:
+    def _make_text_display(self, text: str) -> QWidget:
+        from .resize_handle import wrap_with_resize_handle
         edit = QTextEdit(self._scroll_content)
         edit.setProperty("class", CLS_METADATA_TEXT)
         edit.setPlainText(text)
         edit.setReadOnly(True)
         edit.setMaximumHeight(120)
         edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        return edit
+        return wrap_with_resize_handle(edit, self._scroll_content)
 
     def _make_copy_btn(self, callback) -> QPushButton:
         btn = QPushButton(self._translator.t("copy"), self._scroll_content)

@@ -327,6 +327,25 @@ class MainWindow(QWidget):
         self.metadata_destroyer_card.hide()
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
 
+        # Destroy template combo in title bar
+        self._destroy_combo = QComboBox(self.metadata_destroyer_card._drag_strip)
+        self._destroy_combo.setFixedHeight(22)
+        self._destroy_combo.setMaximumWidth(100)
+        self._destroy_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._destroy_combo.currentIndexChanged.connect(self._on_destroy_template_changed)
+        self._destroy_combo.installEventFilter(self)
+        self.metadata_destroyer_widget._edit_destroy_preset_requested.connect(
+            lambda: QTimer.singleShot(100, lambda: self._show_destroy_template_menu(QCursor.pos()))
+        )
+        self._load_destroy_templates()
+
+        # Position combo in destroyer card's resizeEvent
+        _orig_destroyer_resize = self.metadata_destroyer_card.resizeEvent
+        def _destroyer_resized(event):
+            _orig_destroyer_resize(event)
+            self._position_destroy_combo()
+        self.metadata_destroyer_card.resizeEvent = _destroyer_resized
+
         # History sidebar (right of main_card)
         from .widgets.history_sidebar import HistorySidebar
         self._history_sidebar = HistorySidebar(self._translator, self._storage, self.workspace)
@@ -808,6 +827,9 @@ class MainWindow(QWidget):
         settings.bg_brightness = self._state.settings.bg_brightness
         settings.workspace_menu_order = self._state.settings.workspace_menu_order
         settings.image_manager_folder = self._state.settings.image_manager_folder
+        settings.skipped_version = self._state.settings.skipped_version
+        settings.destroy_templates = self._state.settings.destroy_templates
+        settings.active_destroy_template = self._state.settings.active_destroy_template
         window_geometry = self._base_window_geometry()
         available = self._current_available_geometry()
         self._state.settings = settings
@@ -2474,6 +2496,9 @@ class MainWindow(QWidget):
     def eventFilter(self, watched, event) -> bool:
         if watched is self.title_bar:
             return self._handle_title_bar_event(event)
+        if watched is self._destroy_combo and event.type() == QEvent.Type.ContextMenu:
+            self._show_destroy_template_menu(event.globalPos())
+            return True
         return super().eventFilter(watched, event)
 
     def nativeEvent(self, eventType, message):
@@ -2648,6 +2673,64 @@ class MainWindow(QWidget):
         from .updater import NoUpdateDialog
         dialog = NoUpdateDialog(__version__, self._translator, self)
         dialog.exec()
+
+    # ── Destroy Templates ──
+
+    _DEFAULT_DESTROY_TEMPLATES = [
+        {"name": "哈基米", "text": "哈基米哦南北绿豆~阿西嘎哈椰果奶龙~"},
+        {"name": "空白", "text": ""},
+        {"name": "Rick Roll", "text": "Never gonna give you up, never gonna let you down"},
+    ]
+
+    def _load_destroy_templates(self) -> None:
+        """Load destroy templates into the combo box."""
+        templates = self._state.settings.destroy_templates
+        if not templates:
+            templates = list(self._DEFAULT_DESTROY_TEMPLATES)
+            self._state.settings.destroy_templates = templates
+        active = self._state.settings.active_destroy_template
+        self._destroy_combo.blockSignals(True)
+        self._destroy_combo.clear()
+        for t in templates:
+            self._destroy_combo.addItem(t["name"], t["text"])
+        # Select active
+        idx = 0
+        if active:
+            for i, t in enumerate(templates):
+                if t["name"] == active:
+                    idx = i
+                    break
+        self._destroy_combo.setCurrentIndex(idx)
+        self._destroy_combo.blockSignals(False)
+        self._on_destroy_template_changed(idx)
+
+    def _on_destroy_template_changed(self, index: int) -> None:
+        text = self._destroy_combo.itemData(index)
+        self.metadata_destroyer_widget._destroy_text = text if text else None
+        name = self._destroy_combo.itemText(index)
+        self._state.settings.active_destroy_template = name
+        self._schedule_save()
+
+    def _position_destroy_combo(self) -> None:
+        card = self.metadata_destroyer_card
+        combo = self._destroy_combo
+        close_btn = card._close_btn
+        # Position: left of close button
+        cy = max(0, (card._drag_strip.height() - combo.height()) // 2)
+        combo.move(close_btn.x() - combo.width() - 4, cy)
+
+    def _show_destroy_template_menu(self, pos) -> None:
+        self._open_destroy_template_editor()
+
+    def _open_destroy_template_editor(self) -> None:
+        from .widgets.destroy_template_editor import DestroyTemplateEditor
+        templates = list(self._state.settings.destroy_templates or self._DEFAULT_DESTROY_TEMPLATES)
+        active = self._destroy_combo.currentIndex()
+        dialog = DestroyTemplateEditor(templates, active, self._translator, self)
+        if dialog.exec():
+            self._state.settings.destroy_templates = dialog.templates()
+            self._load_destroy_templates()
+            self._schedule_save()
 
 
 

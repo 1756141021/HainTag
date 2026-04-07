@@ -92,12 +92,13 @@ class ExampleWidget(QWidget):
         self.tags_label.setProperty("class", CLS_FIELD_LABEL)
         root.addWidget(self.tags_label)
 
+        from .resize_handle import wrap_with_resize_handle
         self.tags_edit = QTextEdit(self)
         self.tags_edit.setProperty("class", CLS_EXAMPLE_TEXT)
         self.tags_edit.setMaximumHeight(92)
         self.tags_edit.setPlainText(entry.tags)
         self.tags_edit.textChanged.connect(self.changed)
-        root.addWidget(self.tags_edit)
+        root.addWidget(wrap_with_resize_handle(self.tags_edit, self))
 
         self.description_label = QLabel(self)
         self.description_label.setProperty("class", CLS_FIELD_LABEL)
@@ -108,7 +109,7 @@ class ExampleWidget(QWidget):
         self.description_edit.setMaximumHeight(108)
         self.description_edit.setPlainText(entry.description)
         self.description_edit.textChanged.connect(self.changed)
-        root.addWidget(self.description_edit)
+        root.addWidget(wrap_with_resize_handle(self.description_edit, self))
 
         # Warning when incomplete
         self._warning_label = QLabel(self)
