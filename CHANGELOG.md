@@ -5,6 +5,37 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-08
+
+### Added
+- **自动配置 Python 环境** — 当 onnxruntime 无法在当前 Python 加载时，自动下载 Python 3.12 嵌入式包 + onnxruntime/numpy/Pillow 到 AppData，无需用户手动安装依赖或拥有 ComfyUI
+  - 下载进度条实时显示，中文环境自动使用清华 pip 镜像加速
+  - 安装完成后自动切换到推理模式，重启后自动检测已安装环境
+- **置信度显示开关** — 推理结果支持一键切换显示/隐藏置信度百分比
+- **手动选择 Python 路径** — 设置页新增手动选择按钮，可指定任意已安装 onnxruntime 的 Python（如 ComfyUI 的 python.exe）
+
+### Fixed
+- **tag 映射格式兼容** — 修复 dict 格式 tag_mapping.json 读取 key 而非 tag 字段的问题，修复类别名大小写不匹配（General vs general）
+- **Python 路径持久化** — 外部 Python 路径 (`tagger_python_path`) 现在正确保存到 settings.json，重启后自动恢复
+- **模型目录扫描** — 支持任意 .onnx 文件名（不再要求 model_optimized.onnx），兼容 ComfyUI 等第三方目录结构
+- **启动字体** — 修复启动时 `generate_qss()` 缺少 `body_font_pt` 和 `font_family` 参数，导致首次加载使用系统默认字体而非用户设置
+- **主题/字号响应** — 图像反推组件所有 inline style 改用 `_fs()` 接口，`apply_theme()` 实现完整重建，字体大小切换全局生效
+- **重启应用** — 修复源码模式下重启应用闪退（正确使用 `python -m native_app`）
+
+---
+
+## [0.7.0] - 2026-04-07
+
+### Added
+- **图像反推** — 新增图像反推卡片，支持两种模式：
+  - **本地推理**：使用 cl_tagger ONNX 模型离线识别 Danbooru 标签（需安装 onnxruntime），支持选择 ComfyUI 等已有模型目录，首次使用有引导页面
+  - **LLM 反推**：使用已配的多模态 API 发送图片让 LLM 生成标签，流式输出
+  - 灵敏度滑块（一般/角色阈值）、类别过滤开关、反推词黑名单
+  - 推理结果可复制或发送到工作台输入框
+  - 模型路径持久化，重启后自动加载
+
+---
+
 ## [0.6.1] - 2026-04-04
 
 ### Added

@@ -346,6 +346,22 @@ class MainWindow(QWidget):
             self._position_destroy_combo()
         self.metadata_destroyer_card.resizeEvent = _destroyer_resized
 
+        # Image interrogator
+        from .widgets.interrogator import InterrogatorWidget
+        self.interrogator_card = WidgetCard('widget-interrogator', min_size=QSize(420, 500), parent=self.workspace)
+        self.interrogator_widget = InterrogatorWidget(
+            self._translator, self.interrogator_card,
+            model_dir=self._state.settings.tagger_model_dir,
+            python_path=self._state.settings.tagger_python_path,
+        )
+        self.interrogator_widget.send_to_input.connect(lambda text: self.input_widget.set_text(text))
+        self.interrogator_widget.model_dir_changed.connect(self._on_tagger_model_dir_changed)
+        self.interrogator_widget.python_path_changed.connect(self._on_tagger_python_path_changed)
+        self.interrogator_card.set_content(self.interrogator_widget)
+        self.workspace.add_card(self.interrogator_card)
+        self.interrogator_card.hide()
+        self._label_card(self.interrogator_card, 'interrogator')
+
         # History sidebar (right of main_card)
         from .widgets.history_sidebar import HistorySidebar
         self._history_sidebar = HistorySidebar(self._translator, self._storage, self.workspace)
@@ -830,6 +846,8 @@ class MainWindow(QWidget):
         settings.skipped_version = self._state.settings.skipped_version
         settings.destroy_templates = self._state.settings.destroy_templates
         settings.active_destroy_template = self._state.settings.active_destroy_template
+        settings.tagger_model_dir = self._state.settings.tagger_model_dir
+        settings.tagger_python_path = self._state.settings.tagger_python_path
         window_geometry = self._base_window_geometry()
         available = self._current_available_geometry()
         self._state.settings = settings
@@ -1114,7 +1132,7 @@ class MainWindow(QWidget):
 
     # Basic items shown by default; other items available in customize panel
     _DEFAULT_MENU_ORDER = ['tidy', 'prompts', 'add_example', 'appearance', '---', 'settings', 'pin']
-    _ALL_MENU_ITEMS = ['tidy', 'prompts', 'add_example', 'metadata_viewer', 'metadata_destroyer', 'history', 'image_manager', 'shortcuts', 'clear', 'reset', 'appearance', '---', 'settings', 'pin']
+    _ALL_MENU_ITEMS = ['tidy', 'prompts', 'add_example', 'metadata_viewer', 'metadata_destroyer', 'interrogator', 'history', 'image_manager', 'shortcuts', 'clear', 'reset', 'appearance', '---', 'settings', 'pin']
 
     def _workspace_menu_items(self) -> dict[str, tuple[str, callable]]:
         t = self._translator.t
@@ -1125,6 +1143,7 @@ class MainWindow(QWidget):
             'add_example': (t('add_example'), self._add_example_card),
             'metadata_viewer': (t('metadata_viewer'), self._toggle_metadata_viewer),
             'metadata_destroyer': (t('metadata_destroyer'), self._toggle_metadata_destroyer),
+            'interrogator': (t('interrogator'), self._toggle_interrogator),
             'history': (t('history_panel'), self._toggle_history_sidebar),
             'image_manager': (t('image_manager'), self._open_image_manager),
             'shortcuts': (t('shortcuts'), self._show_shortcuts_panel),
@@ -2094,6 +2113,8 @@ class MainWindow(QWidget):
         self._label_card(self.main_card, 'widget_main')
         self._label_card(self.metadata_viewer_card, 'widget_metadata_viewer')
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
+        self._label_card(self.interrogator_card, 'interrogator')
+        self.interrogator_widget.retranslate_ui()
         self._history_sidebar.retranslate_ui()
         self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
         for index, widget_id in enumerate(sorted(self._example_cards), start=1):
@@ -2157,6 +2178,32 @@ class MainWindow(QWidget):
             card.show()
             if card.x() == 0 and card.y() == 0:
                 card.setGeometry(self.workspace.find_free_position(QSize(380, 300), exclude=card))
+            self.workspace.resolve_overlap(card)
+        self._refresh_dock_items()
+        self._schedule_save()
+
+    def _on_tagger_model_dir_changed(self, path: str) -> None:
+        self._state.settings.tagger_model_dir = path
+        self._schedule_save()
+
+    def _on_tagger_python_path_changed(self, path: str) -> None:
+        self._state.settings.tagger_python_path = path
+        self._schedule_save()
+
+    def _toggle_interrogator(self) -> None:
+        card = self.interrogator_card
+        if card.isVisible():
+            card.hide()
+        else:
+            # Update API settings for LLM tab
+            s = self.settings_panel.settings()
+            from .logic import normalize_api_base_url
+            self.interrogator_widget.set_api_settings(
+                normalize_api_base_url(s.api_base_url), s.api_key, s.model
+            )
+            card.show()
+            if card.x() == 0 and card.y() == 0:
+                card.setGeometry(self.workspace.find_free_position(QSize(440, 520), exclude=card))
             self.workspace.resolve_overlap(card)
         self._refresh_dock_items()
         self._schedule_save()

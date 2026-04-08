@@ -40,6 +40,12 @@ Head to **[Releases](https://github.com/1756141021/HainTag/releases)** and grab 
 
 ---
 
+### Worried about bloat?
+
+Every feature in HainTag lives in its own card — if you don't open it, it doesn't exist. No extra memory overhead. The app is lightweight by design; after sitting idle for a while, memory usage drops even further.
+
+---
+
 ### Features
 
 #### Floating Cards & Always-on-Top
@@ -84,6 +90,14 @@ Drag any card out of the main window into an independent floating panel. Pin the
 - **Metadata viewer** — Supports A1111/Forge, ComfyUI, NovelAI (including LSB steganography), and Fooocus
 - **Metadata destroyer** — Binary chunk-level removal, zero IDAT loss, batch support — strip prompts before sharing
 - **Metadata editor** — Directly modify embedded prompts and parameters
+
+#### Image Interrogation
+
+- **Local inference** — Offline Danbooru tag recognition using cl_tagger ONNX model; supports ComfyUI model directories
+- **LLM vision** — Send images to multimodal APIs for tag generation
+- **Auto environment setup** — Automatically downloads Python + onnxruntime when needed, no manual setup
+- **Threshold controls** — Independent sliders for general and character tag confidence thresholds
+- **Confidence toggle** — Show or hide confidence percentages with one click
 
 #### Appearance & UX
 

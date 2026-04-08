@@ -340,6 +340,9 @@ class AppSettings:
     # Destroy templates
     destroy_templates: list[dict[str, str]] | None = None
     active_destroy_template: str = ""
+    # Tagger
+    tagger_model_dir: str = ""
+    tagger_python_path: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
@@ -389,6 +392,8 @@ class AppSettings:
             skipped_version=str(data.get("skipped_version", "") or ""),
             destroy_templates=data.get("destroy_templates"),
             active_destroy_template=str(data.get("active_destroy_template", "") or ""),
+            tagger_model_dir=str(data.get("tagger_model_dir", "") or ""),
+            tagger_python_path=str(data.get("tagger_python_path", "") or ""),
         )
 
     def to_dict(self) -> dict[str, Any]:
