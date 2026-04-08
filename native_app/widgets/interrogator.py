@@ -178,6 +178,18 @@ class _LocalTaggerTab(QWidget):
         self._setup_status.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
         layout.addWidget(self._setup_status)
 
+        # "Start" button — only visible when both model + python are ready
+        self._start_ready_btn = QPushButton("开始使用", page)
+        self._start_ready_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._start_ready_btn.setStyleSheet(
+            f"background: {p['accent']}; color: {p['accent_text']}; "
+            f"border: none; border-radius: 4px; "
+            f"padding: 10px 20px; font-size: {_fs('fs_12')}; font-weight: bold;"
+        )
+        self._start_ready_btn.clicked.connect(self._confirm_and_switch)
+        self._start_ready_btn.hide()
+        layout.addWidget(self._start_ready_btn)
+
         layout.addStretch()
         return page
 
@@ -394,10 +406,7 @@ class _LocalTaggerTab(QWidget):
         """Show setup options when onnxruntime can't load directly."""
         self._pending_model_dir = model_dir
         self._stack.setCurrentIndex(0)
-        self._setup_status.setText(
-            "onnxruntime 无法在当前 Python 加载（版本不兼容）\n"
-            "请点击「自动配置 Python 环境」或手动选择已安装 onnxruntime 的 Python"
-        )
+        self._update_setup_status()
 
     def _browse_python(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -410,13 +419,12 @@ class _LocalTaggerTab(QWidget):
         self.python_path_changed.emit(path)
         if self._engine:
             self._engine.set_external_python(path)
-            # Re-load model with new python if model was already found
             if self._engine._model_path:
                 self._engine.load(
                     self._engine._model_path, self._engine._mapping_path,
                     external_python=path,
                 )
-        self._check_and_switch_ready()
+        self._update_setup_status()
 
     # ───────────────── Auto Setup ─────────────────
 
@@ -455,7 +463,7 @@ class _LocalTaggerTab(QWidget):
             )
         if hasattr(self, '_auto_setup_btn'):
             self._auto_setup_btn.setText("✓ 已配置")
-        self._check_and_switch_ready()
+        self._update_setup_status()
 
     def _on_env_setup_error(self, error: str):
         self._setup_progress.hide()
@@ -510,7 +518,12 @@ class _LocalTaggerTab(QWidget):
                     self.python_path_changed.emit(embedded)
 
             self._engine.load(model_path, mapping_path, external_python=ext_python)
-            self._check_and_switch_ready()
+            # Startup: auto-switch only if fully ready
+            if self._can_infer():
+                self._switch_to_ready(os.path.dirname(model_path))
+            else:
+                self._stack.setCurrentIndex(0)
+                self._update_setup_status()
         except Exception:
             self._stack.setCurrentIndex(0)
 
@@ -554,6 +567,15 @@ class _LocalTaggerTab(QWidget):
         self._path_display.setText(model_dir)
         self._status.setText("✓ 模型已加载")
 
+    def _confirm_and_switch(self):
+        """User clicked 'Start' — switch to ready page if everything is set."""
+        if self._can_infer():
+            model_dir = os.path.dirname(self._engine._model_path)
+            self._switch_to_ready(model_dir)
+            self.model_dir_changed.emit(model_dir)
+        else:
+            self._update_setup_status()
+
     def _can_infer(self) -> bool:
         """Check if engine is fully ready to run inference."""
         if not self._engine or not self._engine.is_ready:
@@ -562,31 +584,26 @@ class _LocalTaggerTab(QWidget):
             return False
         return True
 
-    def _check_and_switch_ready(self):
-        """Unified gate: only switch to ready page when everything is in place."""
-        if not self._engine or not self._engine._model_path:
-            # No model loaded
-            parts = []
-            if self._external_python:
-                parts.append("✓ Python 已配置")
-            parts.append("请选择模型文件夹")
-            self._setup_status.setText("　".join(parts))
-            return
+    def _update_setup_status(self):
+        """Update setup page status text based on current state. Never auto-switches."""
+        parts = []
+        if self._engine and self._engine._model_path:
+            parts.append("✓ 模型已加载")
+        else:
+            parts.append("⬜ 请选择模型文件夹")
 
-        if not self._can_infer():
-            # Model loaded but can't infer
-            parts = ["✓ 模型已找到"]
-            if not self._engine._use_subprocess:
-                parts.append("✓ onnxruntime 可用")
-            else:
-                parts.append("请配置 Python 环境或选择已有 Python")
-            self._setup_status.setText("　".join(parts))
-            return
+        if self._engine and not self._engine._use_subprocess:
+            parts.append("✓ onnxruntime 可用")
+        elif self._external_python:
+            parts.append(f"✓ Python 已配置")
+        else:
+            parts.append("⬜ 请配置 Python 环境")
 
-        # Both ready — switch
-        model_dir = os.path.dirname(self._engine._model_path)
-        self._switch_to_ready(model_dir)
-        self.model_dir_changed.emit(model_dir)
+        self._setup_status.setText("\n".join(parts))
+
+        # Show/hide the start button
+        if hasattr(self, '_start_ready_btn'):
+            self._start_ready_btn.setVisible(self._can_infer())
 
     def _browse_model_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择模型目录")
@@ -602,7 +619,7 @@ class _LocalTaggerTab(QWidget):
                 self._engine.load(model_file, mapping_file,
                                   external_python=self._external_python or None)
                 self.model_dir_changed.emit(path)
-                self._check_and_switch_ready()
+                self._update_setup_status()
             except Exception as e:
                 self._setup_status.setText(f"加载失败: {e}")
         else:

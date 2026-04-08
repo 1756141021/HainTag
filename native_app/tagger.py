@@ -208,12 +208,6 @@ class TaggerEngine:
             # Direct import failed — use subprocess mode
             if external_python:
                 self._external_python = external_python
-            else:
-                # Auto-detect embedded Python environment
-                from .python_env import get_embedded_python_path, is_env_usable
-                embedded = get_embedded_python_path()
-                if embedded and is_env_usable(embedded):
-                    self._external_python = embedded
             self._use_subprocess = True
             self._mapping = TagMapping(mapping_path)  # still load mapping for category info
 
