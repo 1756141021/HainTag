@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -309,7 +310,11 @@ class TaggerEngine:
         if not python:
             raise RuntimeError("需要指定外部 Python 路径（如 ComfyUI 的 Python）")
 
-        script = os.path.join(os.path.dirname(__file__), "tagger_subprocess.py")
+        # In packaged exe, __file__ may be inside PYZ; use _MEIPASS for data files
+        if hasattr(sys, '_MEIPASS'):
+            script = os.path.join(sys._MEIPASS, "native_app", "tagger_subprocess.py")
+        else:
+            script = os.path.join(os.path.dirname(__file__), "tagger_subprocess.py")
         cats_str = ",".join(enabled_categories or DEFAULT_ENABLED_CATEGORIES)
         bl_str = ",".join(blacklist or DEFAULT_BLACKLIST)
 
@@ -326,7 +331,11 @@ class TaggerEngine:
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"子进程错误: {result.stderr.strip()}")
+            err = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+            raise RuntimeError(f"子进程错误: {err}")
+
+        if not result.stdout.strip():
+            raise RuntimeError("子进程无输出")
 
         data = _json.loads(result.stdout.strip())
         if "error" in data:
