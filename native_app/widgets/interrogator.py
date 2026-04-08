@@ -670,7 +670,8 @@ class _LocalTaggerTab(QWidget):
         self._worker.start()
 
     def _on_inference_error(self, error: str):
-        self._status.setText(f"推理失败: {error}")
+        self._status.setText("推理失败")
+        self._result_edit.setPlainText(error)
         # Show a back-to-setup button so user can reconfigure
         if not hasattr(self, '_back_to_setup_btn') or not self._back_to_setup_btn.isVisible():
             p = current_palette()

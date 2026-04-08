@@ -303,6 +303,8 @@ class TaggerEngine:
         python = self._external_python
         if not python:
             raise RuntimeError("需要指定外部 Python 路径（如 ComfyUI 的 Python）")
+        if not os.path.isfile(python):
+            raise RuntimeError(f"Python 路径无效: {python}")
 
         # Locate subprocess script
         if hasattr(sys, '_MEIPASS'):
@@ -312,23 +314,35 @@ class TaggerEngine:
 
         if not os.path.isfile(script):
             raise RuntimeError(f"推理脚本不存在: {script}")
-        if not os.path.isfile(python):
-            raise RuntimeError(f"Python 不存在: {python}")
 
         cats_str = ",".join(enabled_categories or DEFAULT_ENABLED_CATEGORIES)
         bl_str = ",".join(blacklist or DEFAULT_BLACKLIST)
 
         cmd = [
-            python, script, image_path,
+            python, "-E", script, image_path,
             self._model_path, self._mapping_path,
             str(gen_threshold), str(char_threshold),
             cats_str, bl_str,
         ]
 
+        # Clean env: remove PyInstaller vars and strip _internal from PATH
+        # to prevent bundled DLLs from conflicting with external Python's packages.
+        clean_env = dict(os.environ)
+        for var in ('PYTHONHOME', 'PYTHONPATH', '_MEIPASS'):
+            clean_env.pop(var, None)
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass and 'PATH' in clean_env:
+            mn = os.path.normcase(meipass)
+            clean_env['PATH'] = os.pathsep.join(
+                p for p in clean_env['PATH'].split(os.pathsep)
+                if not os.path.normcase(p).startswith(mn)
+            )
+
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=60,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                env=clean_env,
             )
         except FileNotFoundError:
             raise RuntimeError(f"无法执行: {python}")
@@ -337,7 +351,7 @@ class TaggerEngine:
 
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
-            raise RuntimeError(f"子进程错误 (code {result.returncode}): {err}")
+            raise RuntimeError(f"子进程错误 (code {result.returncode}): {err}\n[python: {python}]\n[script: {script}]")
 
         if not result.stdout.strip():
             raise RuntimeError(f"子进程无输出 (stderr: {result.stderr.strip()[:200]})")

@@ -9,6 +9,10 @@ import json
 import sys
 import os
 
+# Clean PyInstaller env contamination before any imports
+for _var in ('PYTHONHOME', 'PYTHONPATH', '_MEIPASS'):
+    os.environ.pop(_var, None)
+
 import numpy as np
 from PIL import Image
 
@@ -53,8 +57,28 @@ def main():
 
     try:
         import onnxruntime as ort
-    except ImportError:
-        print(json.dumps({"error": "onnxruntime not installed in this Python"}))
+    except Exception as _exc:
+        import traceback as _tb
+        debug = {
+            "error": "onnxruntime not installed in this Python",
+            "exception": str(_exc),
+            "traceback": _tb.format_exc(),
+            "sys.path": sys.path,
+            "sys.prefix": sys.prefix,
+            "sys.executable": sys.executable,
+            "PYTHONHOME": os.environ.get("PYTHONHOME", "NOT_SET"),
+            "PYTHONPATH": os.environ.get("PYTHONPATH", "NOT_SET"),
+            "PATH": os.environ.get("PATH", "")[:500],
+        }
+        # Also write to a debug file for easier reading
+        _debug_path = os.path.join(os.path.dirname(__file__), "ort_debug.txt")
+        try:
+            with open(_debug_path, "w", encoding="utf-8") as _f:
+                for k, v in debug.items():
+                    _f.write(f"{k}: {v}\n")
+        except Exception:
+            pass
+        print(json.dumps(debug))
         sys.exit(1)
 
     # Load model
