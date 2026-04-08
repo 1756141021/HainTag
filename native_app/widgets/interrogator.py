@@ -410,14 +410,9 @@ class _LocalTaggerTab(QWidget):
         self.python_path_changed.emit(path)
         if self._engine:
             self._engine.set_external_python(path)
-        # Retry loading with the model dir
+        # Try to switch to ready if model already loaded
         model_dir = getattr(self, '_pending_model_dir', self._custom_model_dir)
-        if model_dir and self._engine and self._engine.is_ready:
-            self._switch_to_ready(model_dir)
-            self.model_dir_changed.emit(model_dir)
-        elif model_dir and self._engine and self._engine._model_path:
-            # Re-trigger load with the pending dir
-            self._custom_model_dir = model_dir
+        if model_dir and self._engine and self._engine._model_path:
             self._engine.load(
                 self._engine._model_path, self._engine._mapping_path,
                 external_python=path,
@@ -425,8 +420,8 @@ class _LocalTaggerTab(QWidget):
             if self._engine.is_ready:
                 self._switch_to_ready(model_dir)
                 self.model_dir_changed.emit(model_dir)
-        else:
-            self._setup_status.setText("✓ Python 路径已设置，请选择模型文件夹")
+                return
+        self._setup_status.setText("✓ Python 路径已设置，请选择模型文件夹")
 
     # ───────────────── Auto Setup ─────────────────
 
