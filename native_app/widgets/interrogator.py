@@ -520,10 +520,18 @@ class _LocalTaggerTab(QWidget):
                     self.python_path_changed.emit(embedded)
 
             self._engine.load(model_path, mapping_path, external_python=ext_python)
-            if self._engine.is_ready:
+            # Only go to ready page if engine can actually run inference
+            can_infer = (not self._engine._use_subprocess) or self._engine._external_python
+            if self._engine.is_ready and can_infer:
                 self._switch_to_ready(os.path.dirname(model_path))
             else:
+                # Model found but no working Python — show setup page
                 self._stack.setCurrentIndex(0)
+                self._pending_model_dir = os.path.dirname(model_path)
+                self._setup_status.setText(
+                    "模型已找到，但需要配置 Python 环境才能运行推理\n"
+                    "请点击「自动配置 Python 环境」"
+                )
         except Exception:
             self._stack.setCurrentIndex(0)
 
@@ -640,8 +648,16 @@ class _LocalTaggerTab(QWidget):
             set(self._enabled_categories), list(self._blacklist), self,
         )
         self._worker.finished.connect(self._on_inference_done)
-        self._worker.error.connect(lambda e: self._status.setText(f"推理失败: {e}"))
+        self._worker.error.connect(self._on_inference_error)
         self._worker.start()
+
+    def _on_inference_error(self, error: str):
+        if "Python" in error or "python" in error:
+            # Python environment issue — offer to go back to setup
+            self._status.setText(f"推理失败: {error}")
+            self._prompt_python_setup(self._custom_model_dir)
+        else:
+            self._status.setText(f"推理失败: {error}")
 
     def _on_inference_done(self, results: dict):
         self._last_results = results
