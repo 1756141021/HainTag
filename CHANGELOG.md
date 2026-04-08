@@ -21,6 +21,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **启动字体** — 修复启动时 `generate_qss()` 缺少 `body_font_pt` 和 `font_family` 参数，导致首次加载使用系统默认字体而非用户设置
 - **主题/字号响应** — 图像反推组件所有 inline style 改用 `_fs()` 接口，`apply_theme()` 实现完整重建，字体大小切换全局生效
 - **重启应用** — 修复源码模式下重启应用闪退（正确使用 `python -m native_app`）
+- **DLL 冲突** — 从打包中移除 onnxruntime（`excludes=['onnxruntime']`），避免 dist 内的 Python 3.14 版 DLL 与外部 Python 3.12 的 onnxruntime 冲突导致初始化失败
+- **子进程环境隔离** — 清理 PyInstaller 注入的 PYTHONHOME/PYTHONPATH 环境变量和 PATH 中的 _internal 路径，防止污染外部 Python 子进程
 
 ---
 
