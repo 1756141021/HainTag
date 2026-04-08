@@ -410,18 +410,13 @@ class _LocalTaggerTab(QWidget):
         self.python_path_changed.emit(path)
         if self._engine:
             self._engine.set_external_python(path)
-        # Try to switch to ready if model already loaded
-        model_dir = getattr(self, '_pending_model_dir', self._custom_model_dir)
-        if model_dir and self._engine and self._engine._model_path:
-            self._engine.load(
-                self._engine._model_path, self._engine._mapping_path,
-                external_python=path,
-            )
-            if self._engine.is_ready:
-                self._switch_to_ready(model_dir)
-                self.model_dir_changed.emit(model_dir)
-                return
-        self._setup_status.setText("✓ Python 路径已设置，请选择模型文件夹")
+            # Re-load model with new python if model was already found
+            if self._engine._model_path:
+                self._engine.load(
+                    self._engine._model_path, self._engine._mapping_path,
+                    external_python=path,
+                )
+        self._check_and_switch_ready()
 
     # ───────────────── Auto Setup ─────────────────
 
@@ -452,15 +447,15 @@ class _LocalTaggerTab(QWidget):
         if self._engine:
             self._engine.set_external_python(python_path)
 
-        # If model was already found, switch to ready
-        model_dir = getattr(self, '_pending_model_dir', self._custom_model_dir)
-        if self._engine and self._engine.is_ready and model_dir:
-            self._switch_to_ready(model_dir)
-            self.model_dir_changed.emit(model_dir)
-        else:
-            self._setup_status.setText("✓ Python 环境已配置，请选择模型文件夹")
-            if hasattr(self, '_auto_setup_btn'):
-                self._auto_setup_btn.setText("✓ 已配置")
+        # Re-load model with new python if model was already found
+        if self._engine and self._engine._model_path:
+            self._engine.load(
+                self._engine._model_path, self._engine._mapping_path,
+                external_python=python_path,
+            )
+        if hasattr(self, '_auto_setup_btn'):
+            self._auto_setup_btn.setText("✓ 已配置")
+        self._check_and_switch_ready()
 
     def _on_env_setup_error(self, error: str):
         self._setup_progress.hide()
@@ -515,18 +510,7 @@ class _LocalTaggerTab(QWidget):
                     self.python_path_changed.emit(embedded)
 
             self._engine.load(model_path, mapping_path, external_python=ext_python)
-            # Only go to ready page if engine can actually run inference
-            can_infer = (not self._engine._use_subprocess) or self._engine._external_python
-            if self._engine.is_ready and can_infer:
-                self._switch_to_ready(os.path.dirname(model_path))
-            else:
-                # Model found but no working Python — show setup page
-                self._stack.setCurrentIndex(0)
-                self._pending_model_dir = os.path.dirname(model_path)
-                self._setup_status.setText(
-                    "模型已找到，但需要配置 Python 环境才能运行推理\n"
-                    "请点击「自动配置 Python 环境」"
-                )
+            self._check_and_switch_ready()
         except Exception:
             self._stack.setCurrentIndex(0)
 
@@ -570,6 +554,40 @@ class _LocalTaggerTab(QWidget):
         self._path_display.setText(model_dir)
         self._status.setText("✓ 模型已加载")
 
+    def _can_infer(self) -> bool:
+        """Check if engine is fully ready to run inference."""
+        if not self._engine or not self._engine.is_ready:
+            return False
+        if self._engine._use_subprocess and not self._engine._external_python:
+            return False
+        return True
+
+    def _check_and_switch_ready(self):
+        """Unified gate: only switch to ready page when everything is in place."""
+        if not self._engine or not self._engine._model_path:
+            # No model loaded
+            parts = []
+            if self._external_python:
+                parts.append("✓ Python 已配置")
+            parts.append("请选择模型文件夹")
+            self._setup_status.setText("　".join(parts))
+            return
+
+        if not self._can_infer():
+            # Model loaded but can't infer
+            parts = ["✓ 模型已找到"]
+            if not self._engine._use_subprocess:
+                parts.append("✓ onnxruntime 可用")
+            else:
+                parts.append("请配置 Python 环境或选择已有 Python")
+            self._setup_status.setText("　".join(parts))
+            return
+
+        # Both ready — switch
+        model_dir = os.path.dirname(self._engine._model_path)
+        self._switch_to_ready(model_dir)
+        self.model_dir_changed.emit(model_dir)
+
     def _browse_model_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择模型目录")
         if not path:
@@ -582,25 +600,13 @@ class _LocalTaggerTab(QWidget):
                 if self._engine is None:
                     self._engine = TaggerEngine()
                 self._engine.load(model_file, mapping_file,
-                                  external_python=self._external_python)
-                if self._engine._use_subprocess and not self._external_python:
-                    # Need external Python — prompt user for setup
-                    self._prompt_python_setup(path)
-                else:
-                    self._switch_to_ready(path)
-                    self.model_dir_changed.emit(path)
+                                  external_python=self._external_python or None)
+                self.model_dir_changed.emit(path)
+                self._check_and_switch_ready()
             except Exception as e:
-                msg = f"加载失败: {e}"
-                if hasattr(self, '_setup_status'):
-                    self._setup_status.setText(msg)
-                if hasattr(self, '_status'):
-                    self._status.setText(msg)
+                self._setup_status.setText(f"加载失败: {e}")
         else:
-            msg = "目录中未找到 .onnx + tag_mapping.json"
-            if hasattr(self, '_setup_status'):
-                self._setup_status.setText(msg)
-            if hasattr(self, '_status'):
-                self._status.setText(msg)
+            self._setup_status.setText("目录中未找到 .onnx + tag_mapping.json")
 
     # ───────────────── Inference ─────────────────
 
