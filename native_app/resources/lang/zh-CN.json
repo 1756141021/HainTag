@@ -281,6 +281,24 @@
   "update_checking": "正在检查更新…",
   "check_update": "检查更新",
   "metadata_edit_single": "编辑单个图片",
-  "metadata_edit_preset": "编辑预设文本"
+  "metadata_edit_preset": "编辑预设文本",
+  "interrogator": "图像反推",
+  "interrogator_local": "本地推理",
+  "interrogator_llm": "LLM 反推",
+  "interrogator_drop_image": "拖入图片或点击选择",
+  "interrogator_select_image": "选择图片",
+  "interrogator_no_image": "请先选择图片",
+  "interrogator_model_path": "模型路径：",
+  "interrogator_auto": "自动检测",
+  "interrogator_browse_model": "选择模型目录（如已在 ComfyUI 下载）",
+  "interrogator_sensitivity": "识别灵敏度",
+  "interrogator_sensitivity_tip": "越低输出越多标签，越高越精确",
+  "interrogator_general": "一般",
+  "interrogator_character": "角色",
+  "interrogator_categories": "反推类别：",
+  "interrogator_send_to_input": "发送到输入框",
+  "interrogator_start": "开始推理",
+  "interrogator_llm_prompt": "提示词：",
+  "interrogator_llm_default_prompt": "请列出这张图片的 Danbooru 标签，用逗号分隔，只输出标签不要解释"
 }
 

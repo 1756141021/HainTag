@@ -281,6 +281,24 @@
   "update_checking": "Checking for updates…",
   "check_update": "Check for Updates",
   "metadata_edit_single": "Edit Single Image",
-  "metadata_edit_preset": "Edit Preset Text"
+  "metadata_edit_preset": "Edit Preset Text",
+  "interrogator": "Image Interrogator",
+  "interrogator_local": "Local Tagger",
+  "interrogator_llm": "LLM Vision",
+  "interrogator_drop_image": "Drop image or click to select",
+  "interrogator_select_image": "Select Image",
+  "interrogator_no_image": "Please select an image first",
+  "interrogator_model_path": "Model path:",
+  "interrogator_auto": "Auto-detect",
+  "interrogator_browse_model": "Select model directory (e.g. from ComfyUI)",
+  "interrogator_sensitivity": "Sensitivity",
+  "interrogator_sensitivity_tip": "Lower = more tags, Higher = more precise",
+  "interrogator_general": "General",
+  "interrogator_character": "Character",
+  "interrogator_categories": "Categories:",
+  "interrogator_send_to_input": "Send to Input",
+  "interrogator_start": "Start",
+  "interrogator_llm_prompt": "Prompt:",
+  "interrogator_llm_default_prompt": "List the Danbooru tags for this image, comma-separated, tags only no explanation"
 }
 
