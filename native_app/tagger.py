@@ -304,11 +304,17 @@ class TaggerEngine:
         if not python:
             raise RuntimeError("需要指定外部 Python 路径（如 ComfyUI 的 Python）")
 
-        # In packaged exe, __file__ may be inside PYZ; use _MEIPASS for data files
+        # Locate subprocess script
         if hasattr(sys, '_MEIPASS'):
             script = os.path.join(sys._MEIPASS, "native_app", "tagger_subprocess.py")
         else:
             script = os.path.join(os.path.dirname(__file__), "tagger_subprocess.py")
+
+        if not os.path.isfile(script):
+            raise RuntimeError(f"推理脚本不存在: {script}")
+        if not os.path.isfile(python):
+            raise RuntimeError(f"Python 不存在: {python}")
+
         cats_str = ",".join(enabled_categories or DEFAULT_ENABLED_CATEGORIES)
         bl_str = ",".join(blacklist or DEFAULT_BLACKLIST)
 
@@ -319,17 +325,22 @@ class TaggerEngine:
             cats_str, bl_str,
         ]
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60,
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-        )
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=60,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+            )
+        except FileNotFoundError:
+            raise RuntimeError(f"无法执行: {python}")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("推理超时 (60s)")
 
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
-            raise RuntimeError(f"子进程错误: {err}")
+            raise RuntimeError(f"子进程错误 (code {result.returncode}): {err}")
 
         if not result.stdout.strip():
-            raise RuntimeError("子进程无输出")
+            raise RuntimeError(f"子进程无输出 (stderr: {result.stderr.strip()[:200]})")
 
         data = _json.loads(result.stdout.strip())
         if "error" in data:
