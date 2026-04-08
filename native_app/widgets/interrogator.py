@@ -647,12 +647,10 @@ class _LocalTaggerTab(QWidget):
         self._worker.start()
 
     def _on_inference_error(self, error: str):
-        if "Python" in error or "python" in error:
-            # Python environment issue — offer to go back to setup
-            self._status.setText(f"推理失败: {error}")
+        self._status.setText(f"推理失败: {error}")
+        # If subprocess/Python related, show setup page
+        if self._engine and self._engine._use_subprocess:
             self._prompt_python_setup(self._custom_model_dir)
-        else:
-            self._status.setText(f"推理失败: {error}")
 
     def _on_inference_done(self, results: dict):
         self._last_results = results
