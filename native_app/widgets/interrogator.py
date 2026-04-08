@@ -671,9 +671,25 @@ class _LocalTaggerTab(QWidget):
 
     def _on_inference_error(self, error: str):
         self._status.setText(f"推理失败: {error}")
-        # If subprocess/Python related, show setup page
-        if self._engine and self._engine._use_subprocess:
-            self._prompt_python_setup(self._custom_model_dir)
+        # Show a back-to-setup button so user can reconfigure
+        if not hasattr(self, '_back_to_setup_btn') or not self._back_to_setup_btn.isVisible():
+            p = current_palette()
+            self._back_to_setup_btn = QPushButton("返回设置", self._result_edit.parent())
+            self._back_to_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._back_to_setup_btn.setStyleSheet(
+                f"background: transparent; color: {p['accent_text']}; "
+                f"border: 1px solid {p['line']}; border-radius: 4px; "
+                f"padding: 4px 12px; font-size: {_fs('fs_10')};"
+            )
+            self._back_to_setup_btn.clicked.connect(lambda: (
+                self._stack.setCurrentIndex(0),
+                self._update_setup_status(),
+                self._back_to_setup_btn.hide(),
+            ))
+            # Insert after status label
+            body_layout = self._status.parent().layout()
+            status_idx = body_layout.indexOf(self._status)
+            body_layout.insertWidget(status_idx + 1, self._back_to_setup_btn)
 
     def _on_inference_done(self, results: dict):
         self._last_results = results
