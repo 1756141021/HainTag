@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 class CollapsibleSection(QWidget):
@@ -37,19 +38,14 @@ class CollapsibleSection(QWidget):
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(4)
 
-        pal = current_palette()
-        accent = pal['accent_text']
-
         self._toggle_btn = QPushButton(self)
-        self._toggle_btn.setFixedSize(20, 20)
+        self._toggle_btn.setFixedSize(_dp(20), _dp(20))
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setFlat(True)
-        self._toggle_btn.setStyleSheet(f"color: {accent}; border: none; font-size: {_fs('fs_10')};")
         self._toggle_btn.clicked.connect(self.toggle)
         header.addWidget(self._toggle_btn)
 
         self._title_label = QLabel(title, self)
-        self._title_label.setStyleSheet(f"color: {accent}; font-weight: bold; font-size: {_fs('fs_13')};")
         self._title_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._title_label.mousePressEvent = lambda _: self.toggle()
         header.addWidget(self._title_label, 1)
@@ -61,6 +57,7 @@ class CollapsibleSection(QWidget):
         root.addWidget(content)
 
         self._update_state()
+        self.apply_theme()
 
     @property
     def collapsed(self) -> bool:
@@ -82,3 +79,12 @@ class CollapsibleSection(QWidget):
     def _update_state(self) -> None:
         self._content.setVisible(not self._collapsed)
         self._toggle_btn.setText("▶" if self._collapsed else "▼")
+
+    def apply_theme(self) -> None:
+        pal = current_palette()
+        accent = pal['accent_text']
+        self._toggle_btn.setFixedSize(_dp(20), _dp(20))
+        self._toggle_btn.setStyleSheet(f"color: {accent}; border: none; font-size: {_fs('fs_10')};")
+        self._title_label.setStyleSheet(
+            f"color: {accent}; font-weight: bold; font-size: {_fs('fs_13')};"
+        )

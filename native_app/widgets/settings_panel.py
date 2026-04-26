@@ -21,7 +21,20 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..models import AppSettings, CONFIG_SCOPE_FULL_PROFILE, CONFIG_SCOPE_SETTINGS_PAGE
+from ..models import (
+    AppSettings,
+    CONFIG_FINE_SCOPES,
+    CONFIG_SCOPE_APPEARANCE,
+    CONFIG_SCOPE_ARTIST_LIBRARY,
+    CONFIG_SCOPE_ENTRY_DEFAULTS,
+    CONFIG_SCOPE_EXAMPLES,
+    CONFIG_SCOPE_HISTORY,
+    CONFIG_SCOPE_MODEL_PARAMS,
+    CONFIG_SCOPE_OC_LIBRARY,
+    CONFIG_SCOPE_PROMPTS,
+    CONFIG_SCOPE_TAG_MARKERS,
+    CONFIG_SCOPE_WINDOW_LAYOUT,
+)
 from ..ui_tokens import (
     CLS_FIELD_COMBO,
     CLS_FIELD_INPUT,
@@ -30,6 +43,7 @@ from ..ui_tokens import (
     CLS_SLIDER_VALUE,
     CLS_SUMMARY_TEXT,
     SETTINGS_WIDTH,
+    _dp,
 )
 from .common import ToggleSwitch
 
@@ -39,15 +53,15 @@ class SettingsPanel(QWidget):
     language_changed = pyqtSignal(str)
     export_prompts_requested = pyqtSignal()
     import_prompts_requested = pyqtSignal()
-    config_export_requested = pyqtSignal(str)
-    config_import_requested = pyqtSignal(str)
+    config_export_requested = pyqtSignal(list)
+    config_import_requested = pyqtSignal(list)
     fetch_models_requested = pyqtSignal()
 
     def __init__(self, translator: Translator, parent=None) -> None:
         super().__init__(parent)
         self._translator = translator
         self._open = False
-        self._target_width = SETTINGS_WIDTH
+        self._target_width = _dp(SETTINGS_WIDTH)
         self._ui_scale_percent = 100
         self._body_font_point_size = 11
         self._font_profile = 'default'
@@ -97,7 +111,7 @@ class SettingsPanel(QWidget):
         key_row.addWidget(self.api_key, 1)
         self.eye_button = QPushButton('◉', body)
         self.eye_button.setObjectName('SecondaryButton')
-        self.eye_button.setFixedWidth(36)
+        self.eye_button.setFixedWidth(_dp(36))
         self.eye_button.clicked.connect(self._toggle_key_visibility)
         key_row.addWidget(self.eye_button)
         self.body_layout.addLayout(key_row)
@@ -115,7 +129,7 @@ class SettingsPanel(QWidget):
         model_row.addWidget(self.model_combo, 1)
         self.fetch_models_button = QPushButton('↻', body)
         self.fetch_models_button.setObjectName('SecondaryButton')
-        self.fetch_models_button.setFixedWidth(36)
+        self.fetch_models_button.setFixedWidth(_dp(36))
         self.fetch_models_button.clicked.connect(self.fetch_models_requested)
         model_row.addWidget(self.fetch_models_button)
         self.body_layout.addLayout(model_row)
@@ -164,7 +178,7 @@ class SettingsPanel(QWidget):
             s.setProperty('class', CLS_FIELD_SPIN)
             s.setRange(0, max_val)
             s.setValue(val)
-            s.setFixedWidth(52)
+            s.setFixedWidth(_dp(52))
             s.valueChanged.connect(self.settings_changed)
             return s
 
@@ -174,7 +188,7 @@ class SettingsPanel(QWidget):
             row.setSpacing(6)
             lbl = QLabel(label_text, body)
             lbl.setProperty('class', CLS_FIELD_LABEL)
-            lbl.setFixedWidth(90)
+            lbl.setFixedWidth(_dp(90))
             row.addWidget(lbl)
             row.addWidget(spin)
             row.addStretch()
@@ -200,18 +214,18 @@ class SettingsPanel(QWidget):
             start_edit = QLineEdit(body)
             start_edit.setProperty('class', CLS_FIELD_INPUT)
             start_edit.setText(default_start)
-            start_edit.setFixedWidth(80)
+            start_edit.setFixedWidth(_dp(80))
             start_edit.setPlaceholderText(label_start)
             start_edit.textChanged.connect(self.settings_changed)
             end_edit = QLineEdit(body)
             end_edit.setProperty('class', CLS_FIELD_INPUT)
             end_edit.setText(default_end)
-            end_edit.setFixedWidth(80)
+            end_edit.setFixedWidth(_dp(80))
             end_edit.setPlaceholderText(label_end)
             end_edit.textChanged.connect(self.settings_changed)
             lbl = QLabel(label_start, body)
             lbl.setProperty('class', CLS_FIELD_LABEL)
-            lbl.setFixedWidth(70)
+            lbl.setFixedWidth(_dp(70))
             row.addWidget(lbl)
             row.addWidget(start_edit)
             row.addWidget(end_edit)
@@ -333,34 +347,66 @@ class SettingsPanel(QWidget):
     def _show_io_dialog(self, title: str, *, is_export: bool) -> None:
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
-        dlg.setFixedWidth(260)
+        dlg.setFixedWidth(_dp(320))
         layout = QVBoxLayout(dlg)
-        layout.setSpacing(10)
-        cb_settings = QCheckBox(self._translator.t('settings_page'), dlg)
-        cb_profile = QCheckBox(self._translator.t('full_profile'), dlg)
-        cb_prompts = QCheckBox(self._translator.t('export_prompts_item'), dlg)
-        for cb in (cb_settings, cb_profile, cb_prompts):
+        layout.setContentsMargins(_dp(14), _dp(14), _dp(14), _dp(14))
+        layout.setSpacing(_dp(8))
+
+        scope_labels = self._config_scope_labels()
+        config_boxes: list[tuple[str, QCheckBox]] = []
+        for scope in CONFIG_FINE_SCOPES:
+            cb = QCheckBox(scope_labels.get(scope, scope), dlg)
+            cb.setChecked(True)
             layout.addWidget(cb)
+            config_boxes.append((scope, cb))
+
+        tools_row = QHBoxLayout()
+        tools_row.setContentsMargins(0, 0, 0, 0)
+        tools_row.setSpacing(_dp(6))
+        select_all_btn = QPushButton(self._translator.t('select_all'), dlg)
+        select_all_btn.setObjectName('SecondaryButton')
+        clear_btn = QPushButton(self._translator.t('select_none'), dlg)
+        clear_btn.setObjectName('SecondaryButton')
+        select_all_btn.clicked.connect(lambda _checked=False: [cb.setChecked(True) for _, cb in config_boxes])
+        clear_btn.clicked.connect(lambda _checked=False: [cb.setChecked(False) for _, cb in config_boxes])
+        tools_row.addWidget(select_all_btn)
+        tools_row.addWidget(clear_btn)
+        layout.addLayout(tools_row)
+
+        cb_prompts_file = QCheckBox(self._translator.t('export_prompts_item'), dlg)
+        layout.addWidget(cb_prompts_file)
+
         btn = QPushButton(title, dlg)
         btn.setObjectName('SecondaryButton')
         btn.clicked.connect(dlg.accept)
         layout.addWidget(btn)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
+        checked_scopes = [scope for scope, cb in config_boxes if cb.isChecked()]
         if is_export:
-            if cb_settings.isChecked():
-                self.config_export_requested.emit(CONFIG_SCOPE_SETTINGS_PAGE)
-            if cb_profile.isChecked():
-                self.config_export_requested.emit(CONFIG_SCOPE_FULL_PROFILE)
-            if cb_prompts.isChecked():
+            if checked_scopes:
+                self.config_export_requested.emit(checked_scopes)
+            if cb_prompts_file.isChecked():
                 self.export_prompts_requested.emit()
         else:
-            if cb_settings.isChecked():
-                self.config_import_requested.emit(CONFIG_SCOPE_SETTINGS_PAGE)
-            if cb_profile.isChecked():
-                self.config_import_requested.emit(CONFIG_SCOPE_FULL_PROFILE)
-            if cb_prompts.isChecked():
+            if checked_scopes:
+                self.config_import_requested.emit(checked_scopes)
+            if cb_prompts_file.isChecked():
                 self.import_prompts_requested.emit()
+
+    def _config_scope_labels(self) -> dict[str, str]:
+        return {
+            CONFIG_SCOPE_APPEARANCE: self._translator.t('config_scope_appearance'),
+            CONFIG_SCOPE_MODEL_PARAMS: self._translator.t('config_scope_model_params'),
+            CONFIG_SCOPE_PROMPTS: self._translator.t('config_scope_prompts'),
+            CONFIG_SCOPE_EXAMPLES: self._translator.t('config_scope_examples'),
+            CONFIG_SCOPE_OC_LIBRARY: self._translator.t('config_scope_oc_library'),
+            CONFIG_SCOPE_ARTIST_LIBRARY: self._translator.t('config_scope_artist_library'),
+            CONFIG_SCOPE_ENTRY_DEFAULTS: self._translator.t('config_scope_entry_defaults'),
+            CONFIG_SCOPE_TAG_MARKERS: self._translator.t('config_scope_tag_markers'),
+            CONFIG_SCOPE_WINDOW_LAYOUT: self._translator.t('config_scope_window_layout'),
+            CONFIG_SCOPE_HISTORY: self._translator.t('config_scope_history'),
+        }
 
     def target_width(self) -> int:
         return self._target_width

@@ -36,6 +36,28 @@ DEFAULT_SUMMARY_PROMPT = (
 CONFIG_BUNDLE_VERSION = 1
 CONFIG_SCOPE_SETTINGS_PAGE = "settings_page"
 CONFIG_SCOPE_FULL_PROFILE = "full_profile"
+CONFIG_SCOPE_APPEARANCE = "appearance"
+CONFIG_SCOPE_MODEL_PARAMS = "model_params"
+CONFIG_SCOPE_PROMPTS = "prompts"
+CONFIG_SCOPE_EXAMPLES = "examples"
+CONFIG_SCOPE_OC_LIBRARY = "oc_library"
+CONFIG_SCOPE_ARTIST_LIBRARY = "artist_library"
+CONFIG_SCOPE_ENTRY_DEFAULTS = "entry_defaults"
+CONFIG_SCOPE_TAG_MARKERS = "tag_markers"
+CONFIG_SCOPE_WINDOW_LAYOUT = "window_layout"
+CONFIG_SCOPE_HISTORY = "history"
+CONFIG_FINE_SCOPES = [
+    CONFIG_SCOPE_APPEARANCE,
+    CONFIG_SCOPE_MODEL_PARAMS,
+    CONFIG_SCOPE_PROMPTS,
+    CONFIG_SCOPE_EXAMPLES,
+    CONFIG_SCOPE_OC_LIBRARY,
+    CONFIG_SCOPE_ARTIST_LIBRARY,
+    CONFIG_SCOPE_ENTRY_DEFAULTS,
+    CONFIG_SCOPE_TAG_MARKERS,
+    CONFIG_SCOPE_WINDOW_LAYOUT,
+    CONFIG_SCOPE_HISTORY,
+]
 DEFAULT_DOCK_COLLAPSED_THICKNESS = 40
 DEFAULT_DOCK_EXPANDED_VERTICAL_SIZE = 132
 DEFAULT_DOCK_EXPANDED_HORIZONTAL_SIZE = 84
@@ -413,7 +435,7 @@ class ErrorReport:
 @dataclass
 class ConfigBundle:
     version: int = CONFIG_BUNDLE_VERSION
-    scope: str = CONFIG_SCOPE_SETTINGS_PAGE
+    scope: str | list[str] = CONFIG_SCOPE_SETTINGS_PAGE
     payload: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -425,7 +447,11 @@ class ConfigBundle:
             version = int(data.get("version", CONFIG_BUNDLE_VERSION) or CONFIG_BUNDLE_VERSION)
         except (TypeError, ValueError):
             version = CONFIG_BUNDLE_VERSION
-        scope = str(data.get("scope", CONFIG_SCOPE_SETTINGS_PAGE) or CONFIG_SCOPE_SETTINGS_PAGE)
+        scope_data = data.get("scope", CONFIG_SCOPE_SETTINGS_PAGE) or CONFIG_SCOPE_SETTINGS_PAGE
+        if isinstance(scope_data, list):
+            scope = [str(item) for item in scope_data if str(item)]
+        else:
+            scope = str(scope_data)
         return cls(version=version, scope=scope, payload=payload)
 
     def to_dict(self) -> dict[str, Any]:

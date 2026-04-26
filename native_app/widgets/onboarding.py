@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidg
 
 from ..i18n import Translator
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 @dataclass
@@ -76,10 +77,15 @@ class OnboardingOverlay(QWidget):
         btn_row.addWidget(self._next_btn)
 
         panel_layout.addLayout(btn_row)
-        self._panel.setFixedWidth(340)
+        self._panel.setFixedWidth(_dp(340))
 
     def set_steps(self, steps: list[OnboardingStep]) -> None:
         self._steps = steps
+
+    def apply_theme(self) -> None:
+        self._panel.setFixedWidth(_dp(340))
+        if self.isVisible() and self._steps:
+            self._show_step()
 
     def start(self) -> None:
         if not self._steps:

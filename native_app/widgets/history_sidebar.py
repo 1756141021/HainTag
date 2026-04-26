@@ -317,6 +317,11 @@ class HistorySidebar(QWidget):
 
     def set_entries(self, entries: list[HistoryEntry]):
         """Bulk load entries (newest-first from storage)."""
+        for item in self._items:
+            self._list_layout.removeWidget(item)
+            item.deleteLater()
+        self._items.clear()
+        self._empty_label.setVisible(not entries)
         for e in entries:
             self._add_item(e, save=False)
 

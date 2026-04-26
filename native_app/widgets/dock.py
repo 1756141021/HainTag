@@ -184,6 +184,17 @@ class DockPanel(QFrame):
         for button in self._items.values():
             button.set_close_label(label)
 
+    def apply_theme(self) -> None:
+        for widget in [self, self.toggle_button, self.items_container, self.edge_handle, self.corner_handle]:
+            self.style().unpolish(widget)
+            self.style().polish(widget)
+        for handle in self._floating_resize_handles.values():
+            self.style().unpolish(handle)
+            self.style().polish(handle)
+        for button in self._items.values():
+            self.style().unpolish(button)
+            self.style().polish(button)
+
     def set_container_rect_provider(self, provider: Callable[[], QRect]) -> None:
         self._container_rect_provider = provider
 

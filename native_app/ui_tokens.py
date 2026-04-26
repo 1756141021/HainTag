@@ -1,10 +1,28 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from .models import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH
 
 
 BASE_WINDOW_WIDTH = DEFAULT_WINDOW_WIDTH
 BASE_WINDOW_HEIGHT = DEFAULT_WINDOW_HEIGHT
+
+
+@lru_cache(maxsize=1)
+def _dpi_scale() -> float:
+    try:
+        from PyQt6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            return max(0.75, min(3.0, screen.logicalDotsPerInch() / 96.0))
+    except Exception:
+        pass
+    return 1.0
+
+
+def _dp(px: int | float) -> int:
+    return max(1, int(round(float(px) * _dpi_scale())))
 
 WINDOW_RADIUS = 12
 WINDOW_SURFACE_MARGIN = 8

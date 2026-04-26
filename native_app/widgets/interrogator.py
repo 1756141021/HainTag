@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ..i18n import Translator
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 # ═══════════════════════════════════════════════════
@@ -168,7 +169,7 @@ class _LocalTaggerTab(QWidget):
         # Progress bar (hidden until download starts)
         self._setup_progress = QProgressBar(page)
         self._setup_progress.setRange(0, 100)
-        self._setup_progress.setFixedHeight(16)
+        self._setup_progress.setFixedHeight(_dp(16))
         self._setup_progress.hide()
         layout.addWidget(self._setup_progress)
 
@@ -212,7 +213,7 @@ class _LocalTaggerTab(QWidget):
 
         # Compact drop zone
         self._drop_zone = _DropZone(self._t, header)
-        self._drop_zone.setFixedSize(80, 64)
+        self._drop_zone.setFixedSize(_dp(80), _dp(64))
         self._drop_zone.image_selected.connect(self._on_image_selected)
         h_layout.addWidget(self._drop_zone)
 
@@ -230,7 +231,7 @@ class _LocalTaggerTab(QWidget):
             btn.setCheckable(True)
             btn.setChecked(cat in self._enabled_categories)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(20)
+            btn.setFixedHeight(_dp(20))
             btn.clicked.connect(partial(self._toggle_category, cat))
             self._cat_buttons[cat] = btn
             cat_row.addWidget(btn)
@@ -250,10 +251,10 @@ class _LocalTaggerTab(QWidget):
         self._gen_slider = QSlider(Qt.Orientation.Horizontal, header)
         self._gen_slider.setRange(5, 95)
         self._gen_slider.setValue(35)
-        self._gen_slider.setFixedHeight(14)
+        self._gen_slider.setFixedHeight(_dp(14))
         thresh_row.addWidget(self._gen_slider, 1)
         self._gen_value = QLabel("0.35", header)
-        self._gen_value.setFixedWidth(26)
+        self._gen_value.setFixedWidth(_dp(26))
         self._gen_value.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; font-family: monospace;")
         self._gen_slider.valueChanged.connect(lambda v: self._gen_value.setText(f"{v/100:.2f}"))
         thresh_row.addWidget(self._gen_value)
@@ -267,10 +268,10 @@ class _LocalTaggerTab(QWidget):
         self._char_slider = QSlider(Qt.Orientation.Horizontal, header)
         self._char_slider.setRange(5, 95)
         self._char_slider.setValue(70)
-        self._char_slider.setFixedHeight(14)
+        self._char_slider.setFixedHeight(_dp(14))
         thresh_row.addWidget(self._char_slider, 1)
         self._char_value = QLabel("0.70", header)
-        self._char_value.setFixedWidth(26)
+        self._char_value.setFixedWidth(_dp(26))
         self._char_value.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; font-family: monospace;")
         self._char_slider.valueChanged.connect(lambda v: self._char_value.setText(f"{v/100:.2f}"))
         thresh_row.addWidget(self._char_value)
@@ -283,7 +284,7 @@ class _LocalTaggerTab(QWidget):
         self._path_display.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
         path_row.addWidget(self._path_display, 1)
         browse_btn = QPushButton("📂", header)
-        browse_btn.setFixedSize(16, 16)
+        browse_btn.setFixedSize(_dp(16), _dp(16))
         browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         browse_btn.setToolTip("切换模型目录")
         browse_btn.setStyleSheet(f"border: none; background: transparent; font-size: {_fs('fs_9')};")
@@ -309,7 +310,7 @@ class _LocalTaggerTab(QWidget):
         self._show_conf = True
         self._conf_btn = QPushButton("隐藏置信度", body)
         self._conf_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._conf_btn.setFixedHeight(18)
+        self._conf_btn.setFixedHeight(_dp(18))
         self._conf_btn.setStyleSheet(
             f"background: transparent; color: {p['text_dim']}; "
             f"border: 1px solid {p['line']}; border-radius: 3px; "

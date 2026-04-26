@@ -117,6 +117,10 @@ class TagCompleterPopup(QWidget):
         self.move(global_pos)
         self.show()
 
+    def apply_theme(self) -> None:
+        if self.isVisible() and self._target_edit is not None:
+            self.show_suggestions(self._results, self._target_edit, self._token_start)
+
     def accept_current(self) -> None:
         """Insert the currently selected tag into the target edit."""
         item = self._list.currentItem()

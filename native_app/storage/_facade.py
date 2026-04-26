@@ -11,6 +11,7 @@ from ..models import (
     DockState,
     ErrorReport,
     ExampleEntry,
+    HistoryEntry,
     PromptEntry,
     WidgetState,
     WindowState,
@@ -173,7 +174,7 @@ class AppStorage:
     def export_config_bundle(
         self,
         target_path: str,
-        scope: str,
+        scopes: str | list[str],
         *,
         settings: AppSettings,
         prompts: list[PromptEntry] | None = None,
@@ -181,20 +182,51 @@ class AppStorage:
         dock: DockState | None = None,
         widgets: list[WidgetState] | None = None,
         window: WindowState | None = None,
+        artists: list | None = None,
+        ocs: list | None = None,
+        history: list[HistoryEntry] | None = None,
     ) -> None:
         self._config_bundles.export_config_bundle(
-            target_path, scope, settings=settings, prompts=prompts,
+            target_path, scopes, settings=settings, prompts=prompts,
             examples=examples, dock=dock, widgets=widgets, window=window,
+            artists=artists, ocs=ocs, history=history,
         )
 
     def import_config_bundle(self, source_path: str) -> ConfigBundle:
         return self._config_bundles.import_config_bundle(source_path)
 
-    def merged_settings_from_bundle(self, bundle: ConfigBundle, current: AppSettings) -> AppSettings:
-        return self._config_bundles.merged_settings_from_bundle(bundle, current)
+    def merged_settings_from_bundle(
+        self,
+        bundle: ConfigBundle,
+        current: AppSettings,
+        scopes: str | list[str] | None = None,
+    ) -> AppSettings:
+        return self._config_bundles.merged_settings_from_bundle(bundle, current, scopes)
 
-    def state_from_bundle(self, bundle: ConfigBundle, current_state: AppState) -> AppState:
-        return self._config_bundles.state_from_bundle(bundle, current_state)
+    def state_from_bundle(
+        self,
+        bundle: ConfigBundle,
+        current_state: AppState,
+        scopes: str | list[str] | None = None,
+    ) -> AppState:
+        return self._config_bundles.state_from_bundle(bundle, current_state, scopes)
+
+    def library_from_bundle(
+        self,
+        bundle: ConfigBundle,
+        current_artists: list,
+        current_ocs: list,
+        scopes: str | list[str] | None = None,
+    ) -> tuple[list, list]:
+        return self._config_bundles.library_from_bundle(bundle, current_artists, current_ocs, scopes)
+
+    def history_from_bundle(
+        self,
+        bundle: ConfigBundle,
+        current_history: list[HistoryEntry],
+        scopes: str | list[str] | None = None,
+    ) -> list[HistoryEntry]:
+        return self._config_bundles.history_from_bundle(bundle, current_history, scopes)
 
     # ── Error Reports ──
 

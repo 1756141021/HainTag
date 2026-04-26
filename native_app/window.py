@@ -54,8 +54,19 @@ from .models import (
     WindowState,
     DEFAULT_WINDOW_HEIGHT,
     DEFAULT_WINDOW_WIDTH,
+    CONFIG_FINE_SCOPES,
+    CONFIG_SCOPE_APPEARANCE,
+    CONFIG_SCOPE_ARTIST_LIBRARY,
+    CONFIG_SCOPE_ENTRY_DEFAULTS,
+    CONFIG_SCOPE_EXAMPLES,
     CONFIG_SCOPE_FULL_PROFILE,
+    CONFIG_SCOPE_HISTORY,
+    CONFIG_SCOPE_MODEL_PARAMS,
+    CONFIG_SCOPE_OC_LIBRARY,
+    CONFIG_SCOPE_PROMPTS,
     CONFIG_SCOPE_SETTINGS_PAGE,
+    CONFIG_SCOPE_TAG_MARKERS,
+    CONFIG_SCOPE_WINDOW_LAYOUT,
 )
 from .storage import AppStorage
 from .ui_tokens import (
@@ -64,12 +75,12 @@ from .ui_tokens import (
     CLS_SUMMARY_TEXT,
     SAVE_DEBOUNCE_MS,
     SETTINGS_ANIM_DURATION,
-    SETTINGS_WIDTH,
     TITLEBAR_HEIGHT,
     WINDOW_EDGE_GAP,
     WINDOW_SURFACE_MARGIN,
     WINDOW_VISIBLE_RESIZE_BAND,
     WORKSPACE_PADDING,
+    _dp,
 )
 from .widgets.dock import DockPanel
 from .widgets.example_widget import ExampleWidget
@@ -84,6 +95,8 @@ from .widgets.prompt_manager import PromptManagerWidget
 from .widgets.settings_panel import SettingsPanel
 from .widgets.widget_card import WidgetCard
 from .widgets.workspace import DockQueryResult, Workspace
+
+_CONVERSATION_HISTORY_MAX_MESSAGES = 20
 
 if sys.platform == "win32":
     GWL_STYLE = -16
@@ -235,7 +248,7 @@ class MainWindow(QWidget):
         self._lib_tab_btn = QPushButton("◂", self.workspace)
         self._lib_tab_btn.setObjectName("LibTabBtn")
         self._lib_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lib_tab_btn.setFixedSize(20, 48)
+        self._lib_tab_btn.setFixedSize(_dp(20), _dp(48))
         self._lib_tab_btn.clicked.connect(self._toggle_library)
         self._lib_tab_btn.setToolTip(self._translator.t("tip_library"))
 
@@ -300,7 +313,7 @@ class MainWindow(QWidget):
         self.main_card.set_content(main_container)
         # Swap button — floating on splitter handle
         self._swap_btn = QPushButton("⇅", main_container)
-        self._swap_btn.setFixedSize(32, 16)
+        self._swap_btn.setFixedSize(_dp(32), _dp(16))
         self._swap_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._swap_btn.setToolTip(self._translator.t('swap_layout'))
         self._swap_btn.setObjectName("SwapButton")
@@ -329,7 +342,7 @@ class MainWindow(QWidget):
 
         # Destroy template combo in title bar
         self._destroy_combo = QComboBox(self.metadata_destroyer_card._drag_strip)
-        self._destroy_combo.setFixedHeight(22)
+        self._destroy_combo.setFixedHeight(_dp(22))
         self._destroy_combo.setMaximumWidth(100)
         self._destroy_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self._destroy_combo.currentIndexChanged.connect(self._on_destroy_template_changed)
@@ -374,7 +387,7 @@ class MainWindow(QWidget):
         self._history_tab_btn = QPushButton("◁", self.workspace)
         self._history_tab_btn.setObjectName("HistTabBtn")
         self._history_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._history_tab_btn.setFixedSize(16, 80)
+        self._history_tab_btn.setFixedSize(_dp(16), _dp(80))
         self._history_tab_btn.clicked.connect(self._toggle_history_sidebar)
         self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
 
@@ -434,7 +447,7 @@ class MainWindow(QWidget):
 
     @settingsReveal.setter
     def settingsReveal(self, value: int) -> None:
-        self._settings_reveal = max(0, min(int(value), SETTINGS_WIDTH))
+        self._settings_reveal = max(0, min(int(value), self.settings_panel.target_width()))
         self._position_settings_overlay()
 
     def _create_title_button(self, text: str, slot, *, object_name: str = 'TitleBarButton') -> QPushButton:
@@ -807,6 +820,14 @@ class MainWindow(QWidget):
         self._update_token_estimate()
         self._schedule_save()
 
+    def _clear_conversation_history(self) -> None:
+        self._conversation_history.clear()
+        self._update_token_estimate()
+
+    def _trim_conversation_history(self) -> None:
+        if len(self._conversation_history) > _CONVERSATION_HISTORY_MAX_MESSAGES:
+            del self._conversation_history[:-_CONVERSATION_HISTORY_MAX_MESSAGES]
+
     def _refresh_dock_items(self) -> None:
         items: list[tuple[str, str, str]] = []
         icons = {'widget-prompts': 'P', 'widget-input': 'I'}
@@ -884,10 +905,31 @@ class MainWindow(QWidget):
                 dedupe_seconds=12.0,
             )
 
-    def _config_filename_for_scope(self, scope: str) -> str:
-        if scope == CONFIG_SCOPE_FULL_PROFILE:
+    def _config_filename_for_scope(self, scopes: str | list[str]) -> str:
+        normalized = self._normalize_config_scopes(scopes)
+        if normalized == CONFIG_FINE_SCOPES:
             return 'full-profile.aitg.json'
-        return 'settings-page.aitg.json'
+        if len(normalized) == 1:
+            return f'{normalized[0]}.aitg.json'
+        if scopes == CONFIG_SCOPE_FULL_PROFILE:
+            return 'full-profile.aitg.json'
+        if scopes == CONFIG_SCOPE_SETTINGS_PAGE:
+            return 'settings-page.aitg.json'
+        return 'selected-config.aitg.json'
+
+    def _normalize_config_scopes(self, scopes: str | list[str]) -> list[str]:
+        if scopes == CONFIG_SCOPE_FULL_PROFILE:
+            return list(CONFIG_FINE_SCOPES)
+        if scopes == CONFIG_SCOPE_SETTINGS_PAGE:
+            return [
+                CONFIG_SCOPE_APPEARANCE,
+                CONFIG_SCOPE_MODEL_PARAMS,
+                CONFIG_SCOPE_ENTRY_DEFAULTS,
+                CONFIG_SCOPE_TAG_MARKERS,
+                CONFIG_SCOPE_WINDOW_LAYOUT,
+            ]
+        raw_scopes = scopes if isinstance(scopes, list) else [scopes]
+        return [scope for scope in CONFIG_FINE_SCOPES if scope in raw_scopes]
 
     def _apply_pinned_state(self, pinned: bool) -> None:
         current = bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
@@ -981,7 +1023,7 @@ class MainWindow(QWidget):
             self.settings_panel.show()
             self._settings_backdrop.raise_()
             self.settings_panel.raise_()
-        target = SETTINGS_WIDTH if open_state else 0
+        target = self.settings_panel.target_width() if open_state else 0
         self._settings_anim.setStartValue(self._settings_reveal)
         self._settings_anim.setEndValue(target)
         self._settings_anim.start()
@@ -994,7 +1036,10 @@ class MainWindow(QWidget):
     def _position_settings_overlay(self) -> None:
         ch = self.content_host
         self._settings_backdrop.setGeometry(0, 0, ch.width(), ch.height())
-        self.settings_panel.setGeometry(ch.width() - self._settings_reveal, 0, SETTINGS_WIDTH, ch.height())
+        self.settings_panel.setGeometry(
+            ch.width() - self._settings_reveal, 0,
+            self.settings_panel.target_width(), ch.height(),
+        )
 
     def _toggle_settings(self) -> None:
         self._set_settings_open(not self.settings_panel.is_open())
@@ -1667,6 +1712,10 @@ class MainWindow(QWidget):
             self._image_manager.apply_theme()
         if hasattr(self, '_history_sidebar') and self._history_sidebar is not None:
             self._history_sidebar.apply_theme()
+        if hasattr(self, 'dock_panel') and self.dock_panel is not None:
+            self.dock_panel.apply_theme()
+        if hasattr(self, 'interrogator_widget') and self.interrogator_widget is not None:
+            self.interrogator_widget.apply_theme()
         # Refresh card title colors
         for card in self.workspace.all_cards():
             card.apply_theme()
@@ -1698,16 +1747,19 @@ class MainWindow(QWidget):
         send_action = QAction(self._translator.t('stop') if self._worker is not None and self._worker.isRunning() else self._translator.t('send'), menu)
         summary_action = QAction(self._translator.t('summary'), menu)
         clear_action = QAction(self._translator.t('clear_history'), menu)
+        clear_memory_action = QAction(self._translator.t('clear_memory'), menu)
         first_standard = menu.actions()[0] if menu.actions() else None
         if first_standard is not None:
             menu.insertAction(first_standard, clear_action)
-            menu.insertAction(clear_action, summary_action)
+            menu.insertAction(clear_action, clear_memory_action)
+            menu.insertAction(clear_memory_action, summary_action)
             menu.insertAction(summary_action, send_action)
             menu.insertSeparator(send_action)
         else:
             menu.addAction(send_action)
             menu.addAction(summary_action)
             menu.addAction(clear_action)
+            menu.addAction(clear_memory_action)
         chosen = menu.exec(self.input_widget.editor.mapToGlobal(pos))
         if chosen is send_action:
             self._handle_send_action()
@@ -1715,6 +1767,8 @@ class MainWindow(QWidget):
             self._handle_summary_action()
         elif chosen is clear_action:
             self._clear_input_history()
+        elif chosen is clear_memory_action:
+            self._clear_conversation_history()
 
     def _handle_send_action(self) -> None:
         if self._worker is not None and self._worker.isRunning():
@@ -1736,6 +1790,7 @@ class MainWindow(QWidget):
             self.prompt_manager.prompt_entries(), self._collect_examples(),
             self.input_widget.text(), settings.memory_mode,
             ocs=self._library_panel.oc_entries(),
+            history=self._conversation_history if settings.memory_mode else None,
         )
         if not any(message.get('role') == 'user' and message.get('content', '').strip() for message in messages):
             self._append_error(self._translator.t('error_missing_input'))
@@ -1761,8 +1816,6 @@ class MainWindow(QWidget):
         self._pending_history_input = user_text
         self._pending_history_model = settings.model
         self.input_widget.clear_text()
-        if settings.memory_mode:
-            self._conversation_history.append({'role': 'user', 'content': user_text})
         self._start_worker(f'{base_url}/chat/completions', payload, settings.api_key, stream=settings.stream, summary_mode=False)
 
     def _handle_summary_action(self) -> None:
@@ -1872,6 +1925,10 @@ class MainWindow(QWidget):
             output_text = self.output_widget.full_editor.toPlainText().strip()
             nochar_text = self.output_widget.nochar_editor.toPlainText().strip()
             if output_text:
+                if self.settings_panel.settings().memory_mode:
+                    self._conversation_history.append({'role': 'user', 'content': self._pending_history_input})
+                    self._conversation_history.append({'role': 'assistant', 'content': output_text})
+                    self._trim_conversation_history()
                 from datetime import datetime
                 from .models import HistoryEntry
                 entry = HistoryEntry(
@@ -1962,6 +2019,7 @@ class MainWindow(QWidget):
             self.prompt_manager.prompt_entries(), self._collect_examples(),
             self.input_widget.text(), settings.memory_mode,
             ocs=self._library_panel.oc_entries(),
+            history=self._conversation_history if settings.memory_mode else None,
         )
         estimated = estimate_messages_tokens(messages)
         self.input_widget.set_token_estimate(estimated, settings.max_tokens)
@@ -2034,8 +2092,11 @@ class MainWindow(QWidget):
         self._update_token_estimate()
         self._schedule_save()
 
-    def _export_config_bundle(self, scope: str) -> None:
-        default_name = self._config_filename_for_scope(scope)
+    def _export_config_bundle(self, scopes: str | list[str]) -> None:
+        normalized_scopes = self._normalize_config_scopes(scopes)
+        if not normalized_scopes:
+            return
+        default_name = self._config_filename_for_scope(normalized_scopes)
         path, _ = QFileDialog.getSaveFileName(
             self,
             self._translator.t('export_config'),
@@ -2045,16 +2106,19 @@ class MainWindow(QWidget):
         if not path:
             return
         try:
-            current_state = AppState.from_dict(self._build_app_state().to_dict())
+            current_state = self._build_app_state()
             self._storage.export_config_bundle(
                 path,
-                scope,
+                normalized_scopes,
                 settings=current_state.settings,
                 prompts=current_state.prompts,
                 examples=current_state.examples,
                 dock=current_state.dock,
                 widgets=current_state.widgets,
                 window=current_state.window,
+                artists=self._library_panel.artist_entries(),
+                ocs=self._library_panel.oc_entries(),
+                history=self._storage.load_history(),
             )
         except Exception as exc:
             self._report_issue(
@@ -2062,10 +2126,13 @@ class MainWindow(QWidget):
                 self._translator.t('error_export_config_failed'),
                 action='export_config',
                 details=self._traceback_details(exc),
-                extra_context={'scope': scope, 'target_file': Path(path).name},
+                extra_context={'scope': normalized_scopes, 'target_file': Path(path).name},
             )
 
-    def _import_config_bundle(self, scope: str) -> None:
+    def _import_config_bundle(self, scopes: str | list[str]) -> None:
+        normalized_scopes = self._normalize_config_scopes(scopes)
+        if not normalized_scopes:
+            return
         path, _ = QFileDialog.getOpenFileName(
             self,
             self._translator.t('import_config'),
@@ -2076,22 +2143,35 @@ class MainWindow(QWidget):
             return
         try:
             bundle = self._storage.import_config_bundle(path)
-            if scope == CONFIG_SCOPE_SETTINGS_PAGE:
-                settings = self._storage.merged_settings_from_bundle(bundle, self.settings_panel.settings())
-                self.settings_panel.apply_settings(settings)
-                self._update_token_estimate()
-                self._schedule_save()
-                return
-            current_state = AppState.from_dict(self._build_app_state().to_dict())
-            imported_state = self._storage.state_from_bundle(bundle, current_state)
+            current_state = self._build_app_state()
+            imported_state = self._storage.state_from_bundle(bundle, current_state, normalized_scopes)
             self._apply_full_profile_state(imported_state)
+
+            artists, ocs = self._storage.library_from_bundle(
+                bundle,
+                self._library_panel.artist_entries(),
+                self._library_panel.oc_entries(),
+                normalized_scopes,
+            )
+            if CONFIG_SCOPE_ARTIST_LIBRARY in normalized_scopes or CONFIG_SCOPE_OC_LIBRARY in normalized_scopes:
+                self._library_panel.set_entries(artists, ocs)
+                self._storage.save_library(artists, ocs)
+
+            history_entries = self._storage.history_from_bundle(
+                bundle,
+                self._storage.load_history(),
+                normalized_scopes,
+            )
+            if CONFIG_SCOPE_HISTORY in normalized_scopes:
+                self._storage.save_history(history_entries)
+                self._history_sidebar.set_entries(history_entries)
         except ValueError as exc:
             self._report_issue(
                 'import_error',
                 self._translator.t('invalid_config_file'),
                 action='import_config',
                 details=self._traceback_details(exc),
-                extra_context={'scope': scope, 'source_file': Path(path).name},
+                extra_context={'scope': normalized_scopes, 'source_file': Path(path).name},
             )
             return
         except Exception as exc:
@@ -2100,7 +2180,7 @@ class MainWindow(QWidget):
                 self._translator.t('error_import_config_failed'),
                 action='import_config',
                 details=self._traceback_details(exc),
-                extra_context={'scope': scope, 'source_file': Path(path).name},
+                extra_context={'scope': normalized_scopes, 'source_file': Path(path).name},
             )
             return
 
@@ -2415,6 +2495,7 @@ class MainWindow(QWidget):
             self.input_widget.text(),
             settings.memory_mode,
             ocs=self._library_panel.oc_entries(),
+            history=self._conversation_history if settings.memory_mode else None,
         )
         from .widgets.prompt_preview import PromptPreviewPopup
         popup = PromptPreviewPopup(self)

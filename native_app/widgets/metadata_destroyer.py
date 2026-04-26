@@ -18,20 +18,24 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QDoubleSpinBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from ..i18n import Translator
 from ..metadata import MetadataWriter
-from ..theme import current_palette, is_theme_light
-from ..ui_tokens import CLS_METADATA_FRAME, CLS_METADATA_RESULT_ITEM, CLS_METADATA_STATUS_OK
+from ..theme import _fs, current_palette, is_theme_light
+from ..ui_tokens import CLS_METADATA_FRAME, CLS_METADATA_RESULT_ITEM, CLS_METADATA_STATUS_OK, _dp
 
 
 def _palette() -> dict[str, str]:
@@ -119,12 +123,12 @@ class _ResultRow(QWidget):
             lbl.setStyleSheet(f"color: {ok_color};")
             row.addWidget(lbl, 1)
             copy_btn = QPushButton(translator.t("metadata_copy_file"), self)
-            copy_btn.setFixedHeight(22)
+            copy_btn.setFixedHeight(_dp(22))
             copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             copy_btn.clicked.connect(self._copy_file)
             row.addWidget(copy_btn)
             save_btn = QPushButton(translator.t("metadata_save_as"), self)
-            save_btn.setFixedHeight(22)
+            save_btn.setFixedHeight(_dp(22))
             save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             save_btn.clicked.connect(self._save_as)
             row.addWidget(save_btn)
@@ -174,6 +178,7 @@ class MetadataDestroyerWidget(QWidget):
         self._single_src: str = ""
         self._single_dst: str = ""
         self._single_src_name: str = ""
+        self._edit_lora_rows: list[tuple[QWidget, QLineEdit, QDoubleSpinBox]] = []
 
         self._build_ui()
 
@@ -197,8 +202,13 @@ class MetadataDestroyerWidget(QWidget):
         bar_layout.setSpacing(6)
         self._single_name_label = QLabel(self._single_bar)
         bar_layout.addWidget(self._single_name_label, 1)
+        self._single_edit_btn = QPushButton(self._translator.t("metadata_edit_single"), self._single_bar)
+        self._single_edit_btn.setFixedHeight(_dp(22))
+        self._single_edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._single_edit_btn.clicked.connect(self._enter_edit_mode)
+        bar_layout.addWidget(self._single_edit_btn)
         self._single_close_btn = QPushButton("\u2715", self._single_bar)
-        self._single_close_btn.setFixedSize(22, 22)
+        self._single_close_btn.setFixedSize(_dp(22), _dp(22))
         self._single_close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._single_close_btn.clicked.connect(self._back_to_empty)
         bar_layout.addWidget(self._single_close_btn)
@@ -212,8 +222,13 @@ class MetadataDestroyerWidget(QWidget):
         header_layout.setSpacing(6)
         self._results_label = QLabel(self._batch_header)
         header_layout.addWidget(self._results_label, 1)
+        self._save_all_btn = QPushButton(self._translator.t("metadata_save_all"), self._batch_header)
+        self._save_all_btn.setFixedHeight(_dp(22))
+        self._save_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._save_all_btn.clicked.connect(self._save_all)
+        header_layout.addWidget(self._save_all_btn)
         self._clear_btn = QPushButton(self._translator.t("metadata_clear_results"), self._batch_header)
-        self._clear_btn.setFixedHeight(22)
+        self._clear_btn.setFixedHeight(_dp(22))
         self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._clear_btn.clicked.connect(self._back_to_empty)
         header_layout.addWidget(self._clear_btn)
@@ -259,20 +274,23 @@ class MetadataDestroyerWidget(QWidget):
     def _back_to_empty(self) -> None:
         self._state = "empty"
         self._single_dst = ""
+        self._edit_mode = False
         self._preview_label.setVisible(False)
         self._single_bar.setVisible(False)
         self._batch_header.setVisible(False)
         self._scroll.setVisible(False)
-        # Clear batch results
-        layout = self._results_layout
-        while layout.count() > 1:
-            item = layout.takeAt(0)
+        self._clear_result_widgets()
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update()
+
+    def _clear_result_widgets(self) -> None:
+        self._edit_lora_rows = []
+        while self._results_layout.count() > 1:
+            item = self._results_layout.takeAt(0)
             w = item.widget()
             if w:
                 w.setParent(None)
                 w.deleteLater()
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.update()
 
     def process_files(self, paths: list[str]) -> None:
         valid = [p for p in paths if os.path.isfile(p) and Path(p).suffix.lower() in _IMAGE_EXTS]
@@ -299,6 +317,9 @@ class MetadataDestroyerWidget(QWidget):
         self._single_bar.setVisible(True)
         self._batch_header.setVisible(False)
         self._scroll.setVisible(False)
+        self._single_edit_btn.setEnabled(False)
+        self._single_edit_btn.setVisible(True)
+        self._clear_result_widgets()
 
         worker = _DestroyWorker(self._writer, path, dst, self._destroy_text)
         worker.finished.connect(self._on_single_done)
@@ -314,6 +335,7 @@ class MetadataDestroyerWidget(QWidget):
         self._single_dst = dst_path
         self._preview_label.set_file_path(dst_path)
         self._single_name_label.setText(f"\u2713 {fname}")
+        self._single_edit_btn.setEnabled(True)
         pixmap = QPixmap(dst_path)
         if not pixmap.isNull():
             scaled = pixmap.scaled(
@@ -373,14 +395,18 @@ class MetadataDestroyerWidget(QWidget):
         from ..metadata import MetadataReader, ImageMetadata
         from .collapsible_section import CollapsibleSection
 
+        if not self._single_src:
+            return
         reader = MetadataReader()
         meta = reader.read_metadata(self._single_src)
         if meta is None:
             return
         self._edit_meta = meta
+        self._edit_mode = True
 
         # Hide image preview, show edit UI
         self._preview_label.setVisible(False)
+        self._single_edit_btn.setVisible(False)
         self._single_name_label.setText(
             f"{self._translator.t('metadata_edit_mode')} — {self._single_src_name}"
         )
@@ -388,6 +414,7 @@ class MetadataDestroyerWidget(QWidget):
         # Build edit fields in the scroll area
         self._scroll.setVisible(True)
         self._batch_header.setVisible(False)
+        self._clear_result_widgets()
 
         from PyQt6.QtWidgets import QTextEdit
         from ..ui_tokens import CLS_METADATA_TEXT
@@ -416,17 +443,137 @@ class MetadataDestroyerWidget(QWidget):
         )
         self._results_layout.insertWidget(1, neg_section)
 
+        fields = QWidget(self._results_content)
+        grid = QGridLayout(fields)
+        grid.setContentsMargins(4, 4, 4, 4)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(6)
+        p = current_palette()
+        fields.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_10')};")
+
+        def add_label(row: int, text_key: str) -> QLabel:
+            label = QLabel(self._translator.t(text_key), fields)
+            label.setStyleSheet(f"color: {p['text_dim']};")
+            grid.addWidget(label, row, 0)
+            return label
+
+        self._edit_steps = QSpinBox(fields)
+        self._edit_steps.setRange(0, 200000)
+        self._edit_steps.setValue(_safe_int(meta.parameter("Steps"), 0))
+        add_label(0, "metadata_field_steps")
+        grid.addWidget(self._edit_steps, 0, 1)
+
+        self._edit_sampler = QLineEdit(meta.parameter("Sampler"), fields)
+        add_label(1, "metadata_field_sampler")
+        grid.addWidget(self._edit_sampler, 1, 1)
+
+        self._edit_cfg = QDoubleSpinBox(fields)
+        self._edit_cfg.setRange(0, 1000)
+        self._edit_cfg.setDecimals(3)
+        self._edit_cfg.setValue(_safe_float(meta.parameter("CFG scale"), 0.0))
+        add_label(2, "metadata_field_cfg")
+        grid.addWidget(self._edit_cfg, 2, 1)
+
+        self._edit_seed = QLineEdit(meta.parameter("Seed"), fields)
+        add_label(3, "metadata_field_seed")
+        grid.addWidget(self._edit_seed, 3, 1)
+
+        size_w, size_h = meta.size_tuple()
+        size_row = QWidget(fields)
+        size_layout = QHBoxLayout(size_row)
+        size_layout.setContentsMargins(0, 0, 0, 0)
+        self._edit_width = QSpinBox(size_row)
+        self._edit_width.setRange(0, 100000)
+        self._edit_width.setValue(size_w)
+        self._edit_height = QSpinBox(size_row)
+        self._edit_height.setRange(0, 100000)
+        self._edit_height.setValue(size_h)
+        size_layout.addWidget(self._edit_width)
+        size_layout.addWidget(QLabel("x", size_row))
+        size_layout.addWidget(self._edit_height)
+        add_label(4, "metadata_field_size")
+        grid.addWidget(size_row, 4, 1)
+
+        self._edit_model = QLineEdit(meta.parameter("Model") or meta.model_name, fields)
+        add_label(5, "metadata_field_model")
+        grid.addWidget(self._edit_model, 5, 1)
+
+        params_section = CollapsibleSection(
+            self._translator.t("metadata_parameters"),
+            fields,
+            parent=self._results_content,
+        )
+        self._results_layout.insertWidget(2, params_section)
+
+        lora_box = QWidget(self._results_content)
+        self._lora_layout = QVBoxLayout(lora_box)
+        self._lora_layout.setContentsMargins(4, 4, 4, 4)
+        self._lora_layout.setSpacing(4)
+        for item in meta.loras:
+            self._add_lora_row(str(item.get("name", "")), str(item.get("weight", "1")))
+        add_lora_btn = QPushButton(self._translator.t("metadata_add_lora"), lora_box)
+        add_lora_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_lora_btn.clicked.connect(lambda: self._add_lora_row("", "1"))
+        self._lora_layout.addWidget(add_lora_btn)
+        lora_section = CollapsibleSection(
+            self._translator.t("metadata_loras"),
+            lora_box,
+            parent=self._results_content,
+        )
+        self._results_layout.insertWidget(3, lora_section)
+
         # Save button
         save_btn = QPushButton(self._translator.t("metadata_save_copy"), self._results_content)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.clicked.connect(self._save_edited)
-        self._results_layout.insertWidget(2, save_btn)
+        self._results_layout.insertWidget(4, save_btn)
+
+    def _add_lora_row(self, name: str, weight: str) -> None:
+        row = QWidget(self._results_content)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        name_edit = QLineEdit(name, row)
+        name_edit.setPlaceholderText(self._translator.t("metadata_lora_name"))
+        weight_spin = QDoubleSpinBox(row)
+        weight_spin.setRange(-10, 10)
+        weight_spin.setDecimals(3)
+        weight_spin.setSingleStep(0.05)
+        weight_spin.setValue(_safe_float(weight, 1.0))
+        remove_btn = QPushButton("×", row)
+        remove_btn.setFixedSize(_dp(22), _dp(22))
+        remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        remove_btn.clicked.connect(lambda: self._remove_lora_row(row))
+        layout.addWidget(name_edit, 1)
+        layout.addWidget(weight_spin)
+        layout.addWidget(remove_btn)
+        self._edit_lora_rows.append((row, name_edit, weight_spin))
+        insert_at = max(0, self._lora_layout.count() - 1) if hasattr(self, "_lora_layout") else 0
+        self._lora_layout.insertWidget(insert_at, row)
+
+    def _remove_lora_row(self, row: QWidget) -> None:
+        self._edit_lora_rows = [item for item in self._edit_lora_rows if item[0] is not row]
+        row.setParent(None)
+        row.deleteLater()
 
     def _save_edited(self) -> None:
         if not hasattr(self, '_edit_meta') or not self._single_src:
             return
         self._edit_meta.positive_prompt = self._edit_positive.toPlainText()
         self._edit_meta.negative_prompt = self._edit_negative.toPlainText()
+        self._edit_meta.set_parameter("Steps", self._edit_steps.value())
+        self._edit_meta.set_parameter("Sampler", self._edit_sampler.text())
+        self._edit_meta.set_parameter("CFG scale", self._edit_cfg.value())
+        self._edit_meta.set_parameter("Seed", self._edit_seed.text())
+        self._edit_meta.set_size(self._edit_width.value(), self._edit_height.value())
+        self._edit_meta.set_parameter("Model", self._edit_model.text())
+        self._edit_meta.model_name = self._edit_model.text().strip()
+        self._edit_meta.loras = [
+            {"name": name.text().strip(), "weight": f"{weight.value():g}"}
+            for _, name, weight in self._edit_lora_rows
+            if name.text().strip()
+        ]
+        self._edit_meta.sync_loras_to_positive_prompt()
         dst, _ = QFileDialog.getSaveFileName(
             self, self._translator.t("metadata_save_copy"),
             os.path.splitext(self._single_src_name)[0] + "_edited.png",
@@ -442,6 +589,7 @@ class MetadataDestroyerWidget(QWidget):
         self._single_bar.setVisible(False)
         self._batch_header.setVisible(True)
         self._scroll.setVisible(True)
+        self._clear_result_widgets()
 
         for path in paths:
             fname = os.path.basename(path)
@@ -470,6 +618,28 @@ class MetadataDestroyerWidget(QWidget):
             self._translator.t("metadata_destroy_results").replace("{count}", str(count))
         )
 
+    def _save_all(self) -> None:
+        rows = []
+        for i in range(self._results_layout.count()):
+            widget = self._results_layout.itemAt(i).widget()
+            if isinstance(widget, _ResultRow) and widget._dst_path and os.path.isfile(widget._dst_path):
+                rows.append(widget)
+        if not rows:
+            return
+        target_dir = QFileDialog.getExistingDirectory(self, self._translator.t("metadata_save_all"))
+        if not target_dir:
+            return
+        saved = 0
+        for row in rows:
+            src = row._dst_path
+            name = os.path.basename(src)
+            dst = _unique_path(os.path.join(target_dir, name))
+            shutil.copy2(src, dst)
+            saved += 1
+        self._results_label.setText(
+            self._translator.t("metadata_save_all_done").replace("{count}", str(saved))
+        )
+
     def _pick_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, self._translator.t("select_image"), "",
@@ -493,6 +663,8 @@ class MetadataDestroyerWidget(QWidget):
 
     def retranslate_ui(self) -> None:
         self._clear_btn.setText(self._translator.t("metadata_clear_results"))
+        self._save_all_btn.setText(self._translator.t("metadata_save_all"))
+        self._single_edit_btn.setText(self._translator.t("metadata_edit_single"))
         self.update()
 
     def resizeEvent(self, event) -> None:
@@ -513,3 +685,27 @@ class MetadataDestroyerWidget(QWidget):
             shutil.rmtree(self._temp_dir, ignore_errors=True)
         except Exception:
             pass
+
+
+def _safe_int(value: str, fallback: int) -> int:
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _safe_float(value: str, fallback: float) -> float:
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _unique_path(path: str) -> str:
+    base, ext = os.path.splitext(path)
+    candidate = path
+    counter = 1
+    while os.path.exists(candidate):
+        candidate = f"{base}_{counter}{ext}"
+        counter += 1
+    return candidate

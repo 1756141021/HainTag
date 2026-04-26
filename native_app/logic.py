@@ -43,6 +43,7 @@ def build_messages(
     input_text: str,
     memory_mode: bool,
     ocs: list[OCEntry] | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     active_input = extract_active_input(input_text, memory_mode)
     prompt_items = [item for item in prompts if item.enabled and item.content.strip()]
@@ -71,6 +72,13 @@ def build_messages(
         else:
             example_counter += 1
             messages.append({"role": "assistant", "content": _format_example(entry, example_counter)})
+
+    if memory_mode and history:
+        for item in history:
+            role = str(item.get("role", "")).strip()
+            content = str(item.get("content", "")).strip()
+            if role in {"system", "user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
 
     if active_input:
         messages.append({"role": "user", "content": active_input})

@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from ..logic import estimate_text_tokens
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 ROLE_COLORS = {
@@ -36,7 +37,9 @@ class PromptPreviewPopup(QWidget):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setFixedWidth(480)
+        self.setFixedWidth(_dp(480))
+        self._messages: list[dict[str, str]] = []
+        self._title = "Prompt Preview"
 
         p = current_palette()
 
@@ -81,6 +84,8 @@ class PromptPreviewPopup(QWidget):
 
     def set_messages(self, messages: list[dict[str, str]], title: str = "Prompt Preview") -> None:
         """Populate the popup with message sections."""
+        self._messages = messages
+        self._title = title
         # Clear existing sections
         while self._sections_layout.count():
             item = self._sections_layout.takeAt(0)
@@ -129,7 +134,7 @@ class PromptPreviewPopup(QWidget):
             preview.setPlainText(content)
             # Limit height
             line_count = content.count('\n') + 1
-            height = min(max(40, line_count * 16 + 12), 120)
+            height = min(max(_dp(40), line_count * _dp(16) + _dp(12)), _dp(120))
             preview.setFixedHeight(height)
             preview.setStyleSheet(f"""
                 QTextEdit {{
@@ -153,8 +158,12 @@ class PromptPreviewPopup(QWidget):
 
         # Auto-size height
         section_count = len(messages)
-        target_h = min(max(200, section_count * 100 + 60), 600)
+        target_h = min(max(_dp(200), section_count * _dp(100) + _dp(60)), _dp(600))
         self.setFixedHeight(target_h)
+
+    def apply_theme(self) -> None:
+        self.setFixedWidth(_dp(480))
+        self.set_messages(self._messages, self._title)
 
     def show_at(self, global_pos: QPoint) -> None:
         """Show popup near the given global position, clamped to screen."""

@@ -5,6 +5,28 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-04-26
+
+### Added
+- **导出/导入细目** — 设置面板配置导出/导入改为细分勾选项，支持外观与字体、模型参数、提示词、例图、OC 库、画师库、条目默认值、TAG 标记、窗口布局和生成历史
+- **配置包 scope 列表** — 新配置包写入 `scope: [...]`，导入时只合并用户勾选且配置包内存在的部分
+
+### Fixed
+- **敏感配置保护** — 配置导出继续强制排除 API Key 和 API Base URL，导入也不会覆盖当前机器的 API Key / Base URL
+- **旧配置兼容** — 旧 `settings_page` / `full_profile` 配置包可按新的细分勾选项导入，未勾选内容保持当前状态
+
+## [0.7.2] - 2026-04-26
+
+### Added
+- **DPI 尺寸接口** — 新增 `_dp()`，设置面板、Metadata、图像反推等高风险固定尺寸开始按屏幕 DPI 缩放
+- **Metadata 批量全部保存** — 批量销毁结果支持一键保存到目录，重名文件自动追加后缀
+- **Metadata 完整编辑入口** — 单图底栏新增显式编辑按钮，编辑界面支持 prompts、Steps、Sampler、CFG、Seed、Size、Model 和 LoRA 列表
+- **记忆清空入口** — 输入框右键菜单新增“清空记忆”
+
+### Fixed
+- **记忆模式实际带历史** — `build_messages()` 现在可接收最近对话历史；AI 回复成功后才写入记忆，失败和取消不会污染上下文
+- **主题刷新接口补齐** — Dock、折叠区、引导层、TAG 补全、Prompt 预览等组件补齐主题刷新入口
+
 ## [0.7.1] - 2026-04-08
 
 ### Added
