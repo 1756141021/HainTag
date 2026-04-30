@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QTextEdit, QVBoxLayout, QWidget
 
 from ..theme import current_palette
+from ..ui_tokens import _dp
 
 
 class ResizeHandle(QFrame):
@@ -16,7 +17,7 @@ class ResizeHandle(QFrame):
         self._dragging = False
         self._start_y = 0.0
         self._start_h = 0
-        self.setFixedHeight(6)
+        self.setFixedHeight(_dp(6))
         self.setCursor(Qt.CursorShape.SizeVerCursor)
         self._apply_style()
 

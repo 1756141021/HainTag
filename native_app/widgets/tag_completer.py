@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from ..tag_dictionary import TagDictionary, TagInfo
 from ..theme import _fs, is_theme_light, DARK_PALETTE, LIGHT_PALETTE
+from ..ui_tokens import _dp
 
 # Danbooru category colors (dark theme / light theme)
 _CATEGORY_COLORS: dict[int, tuple[str, str]] = {
@@ -79,8 +80,8 @@ class TagCompleterPopup(QWidget):
             item = QListWidgetItem()
             widget = QWidget()
             row = QHBoxLayout(widget)
-            row.setContentsMargins(4, 1, 4, 1)
-            row.setSpacing(8)
+            row.setContentsMargins(_dp(4), 1, _dp(4), 1)
+            row.setSpacing(_dp(8))
 
             name_label = QLabel(info.name.replace("_", " "), widget)
             name_label.setStyleSheet(f"color: {cat_color}; font-weight: bold; font-size: {_fs('fs_12')};")

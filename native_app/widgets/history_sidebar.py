@@ -1,10 +1,11 @@
-"""History Sidebar — collapsible panel on workspace right edge."""
+"""History Sidebar — grouped generation history beside the main workbench."""
 from __future__ import annotations
+
+from datetime import date, datetime, timedelta
 
 from PyQt6.QtCore import QEasingCurve, Qt, QPropertyAnimation, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -19,231 +20,251 @@ from ..i18n import Translator
 from ..models import HistoryEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
+
+
+def _entry_datetime(entry: HistoryEntry) -> datetime | None:
+    try:
+        return datetime.fromisoformat(entry.timestamp)
+    except ValueError:
+        return None
+
+
+def _group_label(entry: HistoryEntry, translator: Translator) -> str:
+    dt = _entry_datetime(entry)
+    if dt is None:
+        return entry.timestamp[:10] or translator.t("history_group_unknown")
+    today = date.today()
+    stamp_date = dt.date()
+    if stamp_date == today:
+        return translator.t("history_group_today")
+    if stamp_date == today - timedelta(days=1):
+        return translator.t("history_group_yesterday")
+    return stamp_date.isoformat()
+
+
+class _HistoryTextBlock(QWidget):
+    def __init__(self, title: str, text: str, copy_label: str, parent=None):
+        super().__init__(parent)
+        self._text = text
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(_dp(4))
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(_dp(6))
+        self._title = QLabel(title, self)
+        header.addWidget(self._title)
+        header.addStretch()
+        self._copy_btn = QPushButton(copy_label, self)
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self._text))
+        header.addWidget(self._copy_btn)
+        root.addLayout(header)
+
+        self._editor = QTextEdit(self)
+        self._editor.setReadOnly(True)
+        self._editor.setPlainText(text)
+        self._editor.setMinimumHeight(_dp(72))
+        self._editor.setMaximumHeight(_dp(120))
+        root.addWidget(self._editor)
+        self.apply_theme()
+
+    def set_title(self, title: str) -> None:
+        self._title.setText(title)
+
+    def set_copy_label(self, text: str) -> None:
+        self._copy_btn.setText(text)
+
+    def apply_theme(self) -> None:
+        p = current_palette()
+        self._title.setStyleSheet(
+            f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; font-weight: bold;"
+        )
+        self._copy_btn.setStyleSheet(
+            f"color: {p['text']}; background: {p['accent']}; border: none; "
+            f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
+        )
+        self._editor.setStyleSheet(
+            f"color: {p['text']}; font-size: {_fs('fs_10')}; background: {p['bg_card']}; "
+            f"border: 1px solid {p['line']}; border-radius: 4px; padding: 4px;"
+        )
 
 
 class _HistorySidebarItem(QWidget):
-    """Single collapsible history entry in the sidebar."""
-
-    clicked = pyqtSignal(object)  # HistoryEntry
-    fill_requested = pyqtSignal(str, str)  # output_text, nochar_text
+    fill_requested = pyqtSignal(str, str)
 
     def __init__(self, entry: HistoryEntry, translator: Translator, parent=None):
         super().__init__(parent)
         self._entry = entry
         self._t = translator
         self._collapsed = True
-        self._body: QWidget | None = None  # lazy
-
-        p = current_palette()
+        self._body: QWidget | None = None
+        self._input_block: _HistoryTextBlock | None = None
+        self._full_block: _HistoryTextBlock | None = None
+        self._nochar_block: _HistoryTextBlock | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header (always visible) ──
         self._header = QWidget(self)
         self._header.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._header.setFixedHeight(44)
-        self._header.setStyleSheet(
-            f"background: transparent; border-bottom: 1px solid {p['line']};"
-        )
-        hlayout = QVBoxLayout(self._header)
-        hlayout.setContentsMargins(8, 4, 8, 4)
-        hlayout.setSpacing(1)
+        self._header.setFixedHeight(_dp(46))
+        header_layout = QVBoxLayout(self._header)
+        header_layout.setContentsMargins(_dp(8), _dp(4), _dp(8), _dp(4))
+        header_layout.setSpacing(1)
 
-        # Row 1: toggle + timestamp + model
         top_row = QHBoxLayout()
-        top_row.setSpacing(6)
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(_dp(6))
         self._toggle_label = QLabel("▸", self._header)
-        self._toggle_label.setFixedWidth(12)
-        self._toggle_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')}; border: none;")
+        self._toggle_label.setFixedWidth(_dp(12))
         top_row.addWidget(self._toggle_label)
 
-        ts_display = entry.timestamp[:16].replace("T", "  ")
-        self._ts_label = QLabel(ts_display, self._header)
-        self._ts_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; border: none;")
+        stamp = entry.timestamp[:16].replace("T", "  ")
+        self._ts_label = QLabel(stamp, self._header)
         top_row.addWidget(self._ts_label)
 
-        self._model_label = None
-        if entry.model:
-            self._model_label = QLabel(entry.model, self._header)
-            self._model_label.setStyleSheet(
-                f"color: {p['accent_text']}; font-size: {_fs('fs_9')}; border: none; "
-                f"background: {p['accent']}; border-radius: 2px; padding: 0 4px;"
-            )
-            top_row.addWidget(self._model_label)
+        self._model_label = QLabel(entry.model, self._header)
+        self._model_label.setVisible(bool(entry.model))
+        top_row.addWidget(self._model_label)
         top_row.addStretch()
-        hlayout.addLayout(top_row)
+        header_layout.addLayout(top_row)
 
-        # Row 2: input preview
-        preview = entry.input_text[:60].replace("\n", " ")
-        if len(entry.input_text) > 60:
-            preview += "…"
+        preview = entry.input_text.replace("\n", " ").strip()
+        if len(preview) > 60:
+            preview = preview[:60] + "…"
         self._preview_label = QLabel(preview, self._header)
-        self._preview_label.setStyleSheet(
-            f"color: {p['text']}; font-size: {_fs('fs_9')}; border: none;"
-        )
-        hlayout.addWidget(self._preview_label)
-
+        header_layout.addWidget(self._preview_label)
         root.addWidget(self._header)
 
-        self.setFixedHeight(44)
+        self.setFixedHeight(_dp(46))
+        self.apply_theme()
 
-    # ── Toggle ──
-
-    def toggle(self):
-        if self._collapsed:
-            self._expand()
-        else:
-            self._collapse()
-
-    def _expand(self):
-        self._collapsed = False
-        self._toggle_label.setText("▾")
-        if self._body is None:
-            self._create_body()
-        self._body.show()
-        self.setFixedHeight(self._header.height() + self._body.sizeHint().height())
-        self.updateGeometry()
-
-    def _collapse(self):
-        self._collapsed = True
-        self._toggle_label.setText("▸")
-        if self._body:
-            self._body.hide()
-        self.setFixedHeight(44)
-        self.updateGeometry()
-
-    def _create_body(self):
-        """Lazy-create the expanded body with full content."""
-        p = current_palette()
+    def _ensure_body(self) -> None:
+        if self._body is not None:
+            return
         self._body = QWidget(self)
         body_layout = QVBoxLayout(self._body)
-        body_layout.setContentsMargins(8, 4, 8, 8)
-        body_layout.setSpacing(4)
+        body_layout.setContentsMargins(_dp(8), _dp(4), _dp(8), _dp(8))
+        body_layout.setSpacing(_dp(6))
 
-        # Full user input
-        self._input_label = QLabel(self._entry.input_text, self._body)
-        self._input_label.setWordWrap(True)
-        self._input_label.setStyleSheet(
-            f"color: {p['text']}; font-size: {_fs('fs_10')}; "
-            f"background: {p['bg_input']}; border: 1px solid {p['line']}; "
-            f"border-radius: 4px; padding: 6px;"
-        )
-        body_layout.addWidget(self._input_label)
+        copy_label = self._t.t("copy")
+        self._input_block = _HistoryTextBlock(self._t.t("history_input"), self._entry.input_text, copy_label, self._body)
+        body_layout.addWidget(self._input_block)
 
-        # Output text (read-only QTextEdit for text selection)
-        self._output_edit = QTextEdit(self._body)
-        self._output_edit.setPlainText(self._entry.output_text)
-        self._output_edit.setReadOnly(True)
-        self._output_edit.setStyleSheet(
-            f"color: {p['text']}; font-size: {_fs('fs_10')}; "
-            f"background: {p['bg_card']}; border: 1px solid {p['line']}; "
-            f"border-radius: 4px; padding: 4px;"
-        )
-        self._output_edit.setMaximumHeight(150)
-        body_layout.addWidget(self._output_edit)
+        self._full_block = _HistoryTextBlock(self._t.t("full_tags"), self._entry.output_text, copy_label, self._body)
+        body_layout.addWidget(self._full_block)
 
-        # Buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
-        btn_row.addStretch()
+        if self._entry.nochar_text.strip():
+            self._nochar_block = _HistoryTextBlock(self._t.t("nochar_tags"), self._entry.nochar_text, copy_label, self._body)
+            body_layout.addWidget(self._nochar_block)
 
-        copy_btn = QPushButton(self._t.t("copy"), self._body)
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setStyleSheet(
-            f"color: {p['text']}; background: {p['accent']}; border: none; "
-            f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
-        )
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self._entry.output_text))
-        btn_row.addWidget(copy_btn)
-
-        fill_btn = QPushButton(self._t.t("history_fill_output"), self._body)
-        fill_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        fill_btn.setStyleSheet(
-            f"color: {p['text']}; background: {p['accent']}; border: none; "
-            f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
-        )
-        fill_btn.clicked.connect(
+        action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 0, 0, 0)
+        action_row.setSpacing(_dp(6))
+        action_row.addStretch()
+        self._fill_btn = QPushButton(self._t.t("history_fill_output"), self._body)
+        self._fill_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._fill_btn.clicked.connect(
             lambda: self.fill_requested.emit(self._entry.output_text, self._entry.nochar_text)
         )
-        btn_row.addWidget(fill_btn)
-
-        body_layout.addLayout(btn_row)
+        action_row.addWidget(self._fill_btn)
+        body_layout.addLayout(action_row)
 
         self.layout().addWidget(self._body)
+        self.apply_theme()
 
-    # ── Events ──
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            # Only toggle if click is on header area
-            header_rect = self._header.geometry()
-            if event.position().y() <= header_rect.bottom():
-                self.toggle()
-                return
-        super().mousePressEvent(event)
+    def toggle(self) -> None:
+        self._collapsed = not self._collapsed
+        if not self._collapsed:
+            self._ensure_body()
+            self._body.show()
+            self._toggle_label.setText("▾")
+            self.setFixedHeight(self._header.height() + self._body.sizeHint().height())
+        else:
+            if self._body is not None:
+                self._body.hide()
+            self._toggle_label.setText("▸")
+            self.setFixedHeight(_dp(46))
+        self.updateGeometry()
 
     def contextMenuEvent(self, event):
-        t = self._t
         menu = QMenu(self)
-        fill_act = menu.addAction(t.t("history_fill_output"))
-        copy_out = menu.addAction(t.t("history_copy_output"))
-        copy_in = menu.addAction(t.t("history_copy_input"))
+        fill_act = menu.addAction(self._t.t("history_fill_output"))
+        copy_input = menu.addAction(self._t.t("history_copy_input"))
+        copy_full = menu.addAction(self._t.t("history_copy_output"))
+        copy_nochar = None
+        if self._entry.nochar_text.strip():
+            copy_nochar = menu.addAction(self._t.t("history_copy_nochar"))
         chosen = menu.exec(event.globalPos())
         if chosen == fill_act:
             self.fill_requested.emit(self._entry.output_text, self._entry.nochar_text)
-        elif chosen == copy_out:
-            QApplication.clipboard().setText(self._entry.output_text)
-        elif chosen == copy_in:
+        elif chosen == copy_input:
             QApplication.clipboard().setText(self._entry.input_text)
+        elif chosen == copy_full:
+            QApplication.clipboard().setText(self._entry.output_text)
+        elif copy_nochar is not None and chosen == copy_nochar:
+            QApplication.clipboard().setText(self._entry.nochar_text)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= self._header.height():
+            self.toggle()
+            return
+        super().mousePressEvent(event)
 
     def enterEvent(self, event):
         p = current_palette()
-        self._header.setStyleSheet(
-            f"background: {p['hover_bg']}; border-bottom: 1px solid {p['line']};"
-        )
+        self._header.setStyleSheet(f"background: {p['hover_bg']}; border-bottom: 1px solid {p['line']};")
+        super().enterEvent(event)
 
     def leaveEvent(self, event):
         p = current_palette()
-        self._header.setStyleSheet(
-            f"background: transparent; border-bottom: 1px solid {p['line']};"
-        )
+        self._header.setStyleSheet(f"background: transparent; border-bottom: 1px solid {p['line']};")
+        super().leaveEvent(event)
 
-    # ── Theme ──
+    def retranslate_ui(self) -> None:
+        if self._input_block is not None:
+            self._input_block.set_title(self._t.t("history_input"))
+            self._input_block.set_copy_label(self._t.t("copy"))
+        if self._full_block is not None:
+            self._full_block.set_title(self._t.t("full_tags"))
+            self._full_block.set_copy_label(self._t.t("copy"))
+        if self._nochar_block is not None:
+            self._nochar_block.set_title(self._t.t("nochar_tags"))
+            self._nochar_block.set_copy_label(self._t.t("copy"))
+        if hasattr(self, "_fill_btn"):
+            self._fill_btn.setText(self._t.t("history_fill_output"))
 
-    def apply_theme(self):
+    def apply_theme(self) -> None:
         p = current_palette()
-        self._header.setStyleSheet(
-            f"background: transparent; border-bottom: 1px solid {p['line']};"
+        self._header.setStyleSheet(f"background: transparent; border-bottom: 1px solid {p['line']};")
+        self._toggle_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')};")
+        self._ts_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
+        self._model_label.setStyleSheet(
+            f"color: {p['accent_text']}; font-size: {_fs('fs_9')}; background: {p['accent']}; "
+            f"border-radius: 2px; padding: 0 4px;"
         )
-        self._toggle_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')}; border: none;")
-        self._ts_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; border: none;")
-        if self._model_label:
-            self._model_label.setStyleSheet(
-                f"color: {p['accent_text']}; font-size: {_fs('fs_9')}; border: none; "
-                f"background: {p['accent']}; border-radius: 2px; padding: 0 4px;"
-            )
-        self._preview_label.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_9')}; border: none;")
-        if self._body and self._input_label:
-            self._input_label.setStyleSheet(
-                f"color: {p['text']}; font-size: {_fs('fs_10')}; "
-                f"background: {p['bg_input']}; border: 1px solid {p['line']}; "
-                f"border-radius: 4px; padding: 6px;"
-            )
-            self._output_edit.setStyleSheet(
-                f"color: {p['text']}; font-size: {_fs('fs_10')}; "
-                f"background: {p['bg_card']}; border: 1px solid {p['line']}; "
-                f"border-radius: 4px; padding: 4px;"
+        self._preview_label.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_9')};")
+        if self._input_block is not None:
+            self._input_block.apply_theme()
+        if self._full_block is not None:
+            self._full_block.apply_theme()
+        if self._nochar_block is not None:
+            self._nochar_block.apply_theme()
+        if hasattr(self, "_fill_btn"):
+            self._fill_btn.setStyleSheet(
+                f"color: {p['text']}; background: {p['accent']}; border: none; "
+                f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
             )
 
 
 class HistorySidebar(QWidget):
-    """Collapsible sidebar panel for generation history, positioned to the right of the workspace card."""
+    EXPANDED_WIDTH = 320
 
-    EXPANDED_WIDTH = 280
-
-    entry_fill_requested = pyqtSignal(str, str)  # output_text, nochar_text
+    entry_fill_requested = pyqtSignal(str, str)
     changed = pyqtSignal()
     width_changed = pyqtSignal(int)
 
@@ -252,44 +273,29 @@ class HistorySidebar(QWidget):
         self.setObjectName("HistorySidebar")
         self._t = translator
         self._storage = storage
+        self._retention_days = 30
+        self._entries: list[HistoryEntry] = []
         self._items: list[_HistorySidebarItem] = []
-
-        p = current_palette()
-        self.setStyleSheet(
-            f"#HistorySidebar {{ background: {p['bg']}; border-left: 1px solid {p['line_strong']}; }}"
-        )
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ──
         header = QWidget(self)
-        header.setFixedHeight(36)
+        header.setFixedHeight(_dp(36))
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(10, 0, 6, 0)
-        header_layout.setSpacing(6)
-
-        self._title = QLabel(translator.t("history_panel"), header)
-        self._title.setStyleSheet(
-            f"color: {p['text']}; font-size: {_fs('fs_11')}; font-weight: bold;"
-        )
+        header_layout.setContentsMargins(_dp(10), 0, _dp(6), 0)
+        header_layout.setSpacing(_dp(6))
+        self._title = QLabel(header)
         header_layout.addWidget(self._title)
         header_layout.addStretch()
-
         self._clear_btn = QPushButton("×", header)
-        self._clear_btn.setFixedSize(20, 20)
+        self._clear_btn.setFixedSize(_dp(20), _dp(20))
         self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._clear_btn.setToolTip(translator.t("history_clear"))
-        self._clear_btn.setStyleSheet(
-            f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
-        )
         self._clear_btn.clicked.connect(self._clear_all)
         header_layout.addWidget(self._clear_btn)
-
         root.addWidget(header)
 
-        # ── Scroll area ──
         self._scroll = QScrollArea(self)
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(self._scroll.Shape.NoFrame)
@@ -304,68 +310,85 @@ class HistorySidebar(QWidget):
         self._scroll.setWidget(self._scroll_content)
         root.addWidget(self._scroll, 1)
 
-        # Empty state
-        self._empty_label = QLabel(translator.t("history_empty"), self._scroll_content)
+        self._empty_label = QLabel(self._scroll_content)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_11')};")
         self._list_layout.insertWidget(0, self._empty_label)
 
-        # Initial size
         self.setFixedWidth(self.EXPANDED_WIDTH)
+        self.retranslate_ui()
+        self.apply_theme()
 
-    # ── Public API ──
+    def set_retention_days(self, retention_days: int) -> None:
+        self._retention_days = max(0, int(retention_days))
+
+    def _sorted_entries(self, entries: list[HistoryEntry]) -> list[HistoryEntry]:
+        return sorted(
+            entries,
+            key=lambda entry: _entry_datetime(entry) or datetime.min,
+            reverse=True,
+        )
 
     def set_entries(self, entries: list[HistoryEntry]):
-        """Bulk load entries (newest-first from storage)."""
-        for item in self._items:
-            self._list_layout.removeWidget(item)
-            item.deleteLater()
-        self._items.clear()
-        self._empty_label.setVisible(not entries)
-        for e in entries:
-            self._add_item(e, save=False)
+        self._entries = self._sorted_entries(entries)
+        self._rebuild()
 
     def add_entry(self, entry: HistoryEntry):
-        """Append a new entry and persist."""
-        self._add_item(entry, save=True)
+        self._entries.insert(0, entry)
+        self._entries = self._sorted_entries(self._entries)
+        self._storage.append_history(entry, retention_days=self._retention_days)
+        self._entries = self._storage.load_history(retention_days=self._retention_days)
+        self._rebuild()
+        self.changed.emit()
 
-    def _add_item(self, entry: HistoryEntry, save: bool = True):
-        self._empty_label.hide()
-        item = _HistorySidebarItem(entry, self._t, self._scroll_content)
-        item.fill_requested.connect(self.entry_fill_requested.emit)
-        self._items.insert(0, item)
-        self._list_layout.insertWidget(0, item)
-        if save:
-            self._storage.append_history(entry)
+    def _clear_layout_items(self) -> None:
+        while self._list_layout.count() > 2:
+            item = self._list_layout.takeAt(1)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._items.clear()
+
+    def _rebuild(self) -> None:
+        self._clear_layout_items()
+        self._empty_label.setVisible(not self._entries)
+        if not self._entries:
+            return
+
+        current_group = None
+        for entry in self._entries:
+            group_label = _group_label(entry, self._t)
+            if group_label != current_group:
+                current_group = group_label
+                header = QLabel(group_label, self._scroll_content)
+                header.setObjectName("HistoryGroupHeader")
+                self._list_layout.insertWidget(self._list_layout.count() - 1, header)
+            item = _HistorySidebarItem(entry, self._t, self._scroll_content)
+            item.fill_requested.connect(self.entry_fill_requested.emit)
+            self._items.append(item)
+            self._list_layout.insertWidget(self._list_layout.count() - 1, item)
+        self.apply_theme()
 
     def _clear_all(self):
         from .image_manager import _StyledDialog
-        if not _StyledDialog.confirm(self, self._t.t("history_clear"),
-                                      self._t.t("history_clear_confirm")):
+        if not _StyledDialog.confirm(self, self._t.t("history_clear"), self._t.t("history_clear_confirm")):
             return
-        for item in self._items:
-            self._list_layout.removeWidget(item)
-            item.deleteLater()
-        self._items.clear()
+        self._entries.clear()
         self._storage.clear_history()
-        self._empty_label.show()
+        self._rebuild()
         self.changed.emit()
 
-    # ── Animation ──
-
     def animate_show(self):
-        """Animate panel expanding from 0 to full width."""
         self.show()
         self.raise_()
         self._animate_width(0, self.EXPANDED_WIDTH)
 
     def animate_hide(self, on_finish=None):
-        """Animate panel collapsing to 0 width, then hide."""
         def _done():
             self.hide()
             self.width_changed.emit(0)
-            if on_finish:
+            if on_finish is not None:
                 on_finish()
+
         self._animate_width(self.EXPANDED_WIDTH, 0, on_finish=_done)
 
     def _animate_width(self, start: int, end: int, on_finish=None):
@@ -380,19 +403,27 @@ class HistorySidebar(QWidget):
             self.setMinimumWidth(end)
             self.setMaximumWidth(end)
             self.width_changed.emit(end)
-            if on_finish:
+            if on_finish is not None:
                 on_finish()
 
-        anim.finished.connect(_on_done)
         anim.valueChanged.connect(lambda: self.width_changed.emit(self.width()))
+        anim.finished.connect(_on_done)
         anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
-    # ── Theme ──
+    def retranslate_ui(self):
+        self._title.setText(self._t.t("history_panel"))
+        self._clear_btn.setToolTip(self._t.t("history_clear"))
+        self._empty_label.setText(self._t.t("history_empty"))
+        for item in self._items:
+            item.retranslate_ui()
+        self._rebuild()
 
     def apply_theme(self):
         p = current_palette()
         self.setStyleSheet(
-            f"#HistorySidebar {{ background: {p['bg']}; border-left: 1px solid {p['line_strong']}; }}"
+            f"#HistorySidebar {{ background: {p['bg']}; border-left: 1px solid {p['line_strong']}; }} "
+            f"QLabel#HistoryGroupHeader {{ color: {p['text_dim']}; font-size: {_fs('fs_9')}; "
+            f"font-weight: bold; padding: 8px 10px 4px 10px; }}"
         )
         self._title.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_11')}; font-weight: bold;"
@@ -400,10 +431,8 @@ class HistorySidebar(QWidget):
         self._clear_btn.setStyleSheet(
             f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
         )
-        self._empty_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_11')};")
+        self._empty_label.setStyleSheet(
+            f"color: {p['text_dim']}; font-size: {_fs('fs_11')};"
+        )
         for item in self._items:
             item.apply_theme()
-
-    def retranslate_ui(self):
-        self._title.setText(self._t.t("history_panel"))
-        self._clear_btn.setToolTip(self._t.t("history_clear"))

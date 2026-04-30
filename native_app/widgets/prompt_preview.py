@@ -54,8 +54,8 @@ class PromptPreviewPopup(QWidget):
         """)
 
         self._layout = QVBoxLayout(self._surface)
-        self._layout.setContentsMargins(12, 10, 12, 10)
-        self._layout.setSpacing(6)
+        self._layout.setContentsMargins(_dp(12), _dp(10), _dp(12), _dp(10))
+        self._layout.setSpacing(_dp(6))
 
         # Header
         self._header = QLabel(self._surface)
@@ -74,7 +74,7 @@ class PromptPreviewPopup(QWidget):
         self._scroll_content = QWidget()
         self._sections_layout = QVBoxLayout(self._scroll_content)
         self._sections_layout.setContentsMargins(0, 0, 0, 0)
-        self._sections_layout.setSpacing(4)
+        self._sections_layout.setSpacing(_dp(4))
         scroll.setWidget(self._scroll_content)
         self._layout.addWidget(scroll, 1)
 

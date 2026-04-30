@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 from ..i18n import Translator
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 class HintBubble(QWidget):
@@ -34,8 +35,8 @@ class HintBubble(QWidget):
         )
 
         layout = QHBoxLayout(surface)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(_dp(10), _dp(6), _dp(10), _dp(6))
+        layout.setSpacing(_dp(8))
 
         lbl = QLabel(text, surface)
         lbl.setWordWrap(True)
@@ -57,7 +58,7 @@ class HintBubble(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(surface)
         self.adjustSize()
-        self.setFixedWidth(min(300, self.sizeHint().width() + 20))
+        self.setFixedWidth(min(_dp(300), self.sizeHint().width() + _dp(20)))
 
     def show_near(self, widget: QWidget, position: str = "below") -> None:
         """Position the bubble near the target widget, clamped to screen."""

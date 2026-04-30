@@ -71,6 +71,10 @@ _SETTING_FIELDS_BY_SCOPE = {
         "summary_prompt",
         "tagger_model_dir",
         "tagger_python_path",
+        "tagger_llm_use_separate",
+        "tagger_llm_model",
+        "tagger_llm_presets",
+        "tagger_llm_active_preset",
     },
     CONFIG_SCOPE_ENTRY_DEFAULTS: {
         "default_example_order",
@@ -87,9 +91,12 @@ _SETTING_FIELDS_BY_SCOPE = {
     CONFIG_SCOPE_WINDOW_LAYOUT: {
         "workspace_menu_order",
         "image_manager_folder",
+        "send_mode",
+        "history_retention_days",
+        "library_last_section",
     },
 }
-_BLOCKED_SETTING_FIELDS = {"api_base_url", "api_key"}
+_BLOCKED_SETTING_FIELDS = {"api_base_url", "api_key", "tagger_llm_api_key", "tagger_llm_base_url"}
 
 
 class ConfigBundleStorage:

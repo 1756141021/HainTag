@@ -61,6 +61,8 @@ CONFIG_FINE_SCOPES = [
 DEFAULT_DOCK_COLLAPSED_THICKNESS = 40
 DEFAULT_DOCK_EXPANDED_VERTICAL_SIZE = 132
 DEFAULT_DOCK_EXPANDED_HORIZONTAL_SIZE = 84
+SEND_MODE_ENTER = "enter"
+SEND_MODE_CTRL_ENTER = "ctrl_enter"
 
 
 @dataclass
@@ -321,6 +323,68 @@ class WindowState:
 
 
 @dataclass
+class FloatingTrayMemberState:
+    widget_id: str = ""
+    x: int = 0
+    y: int = 0
+    width: int = 320
+    height: int = 220
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FloatingTrayMemberState":
+        return cls(
+            widget_id=str(data.get("widget_id", "")),
+            x=int(data.get("x", 0) or 0),
+            y=int(data.get("y", 0) or 0),
+            width=int(data.get("width", 320) or 320),
+            height=int(data.get("height", 220) or 220),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class FloatingTrayState:
+    visible: bool = False
+    x: int = 0
+    y: int = 0
+    members: list[FloatingTrayMemberState] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FloatingTrayState":
+        members = data.get("members", [])
+        return cls(
+            visible=bool(data.get("visible", False)),
+            x=int(data.get("x", 0) or 0),
+            y=int(data.get("y", 0) or 0),
+            members=[
+                FloatingTrayMemberState.from_dict(item)
+                for item in members
+                if isinstance(item, dict)
+            ],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "visible": self.visible,
+            "x": self.x,
+            "y": self.y,
+            "members": [item.to_dict() for item in self.members],
+        }
+
+
+def _migrate_llm_presets(data: dict) -> list:
+    presets = data.get("tagger_llm_presets")
+    if isinstance(presets, list):
+        return presets
+    old_custom = str(data.get("tagger_llm_custom_prompt", "") or "")
+    if old_custom.strip():
+        return [{"name": "Custom", "text": old_custom}]
+    return []
+
+
+@dataclass
 class AppSettings:
     api_base_url: str = ""
     api_key: str = ""
@@ -333,6 +397,7 @@ class AppSettings:
     max_tokens: int = 64000
     stream: bool = True
     memory_mode: bool = True
+    send_mode: str = SEND_MODE_ENTER
     summary_prompt: str = DEFAULT_SUMMARY_PROMPT
     language: str = "zh-CN"
     ui_scale_percent: int = 100
@@ -347,6 +412,8 @@ class AppSettings:
     bg_brightness: int = 0
     workspace_menu_order: list[str] | None = None
     image_manager_folder: str = ""
+    history_retention_days: int = 30
+    library_last_section: str = "artist"
     # TAG extraction markers
     tag_full_start: str = "[TAGS]"
     tag_full_end: str = "[/TAGS]"
@@ -365,6 +432,13 @@ class AppSettings:
     # Tagger
     tagger_model_dir: str = ""
     tagger_python_path: str = ""
+    # LLM Tagger
+    tagger_llm_use_separate: bool = False
+    tagger_llm_base_url: str = ""
+    tagger_llm_api_key: str = ""
+    tagger_llm_model: str = ""
+    tagger_llm_presets: list = field(default_factory=list)
+    tagger_llm_active_preset: int = 0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
@@ -389,6 +463,7 @@ class AppSettings:
             max_tokens=clamp_int(data.get("max_tokens", data.get("maxTokens", 2048)), 2048, 1, 200000),
             stream=bool(data.get("stream", True)),
             memory_mode=bool(data.get("memory_mode", True)),
+            send_mode=str(data.get("send_mode", SEND_MODE_ENTER) or SEND_MODE_ENTER),
             summary_prompt=str(data.get("summary_prompt", DEFAULT_SUMMARY_PROMPT)),
             language=str(data.get("language", "zh-CN") or "zh-CN"),
             ui_scale_percent=clamp_int(data.get("ui_scale_percent", 100), 100, 50, 300),
@@ -403,6 +478,8 @@ class AppSettings:
             bg_brightness=clamp_int(data.get("bg_brightness", 0), 0, 0, 100),
             workspace_menu_order=data.get("workspace_menu_order"),
             image_manager_folder=str(data.get("image_manager_folder", "") or ""),
+            history_retention_days=clamp_int(data.get("history_retention_days", 30), 30, 0, 3650),
+            library_last_section=str(data.get("library_last_section", "artist") or "artist"),
             tag_full_start=str(data.get("tag_full_start", "[TAGS]") or "[TAGS]"),
             tag_full_end=str(data.get("tag_full_end", "[/TAGS]") or "[/TAGS]"),
             tag_nochar_start=str(data.get("tag_nochar_start", "[NOTAGS]") or "[NOTAGS]"),
@@ -416,6 +493,12 @@ class AppSettings:
             active_destroy_template=str(data.get("active_destroy_template", "") or ""),
             tagger_model_dir=str(data.get("tagger_model_dir", "") or ""),
             tagger_python_path=str(data.get("tagger_python_path", "") or ""),
+            tagger_llm_use_separate=bool(data.get("tagger_llm_use_separate", False)),
+            tagger_llm_base_url=str(data.get("tagger_llm_base_url", "") or ""),
+            tagger_llm_api_key=str(data.get("tagger_llm_api_key", "") or ""),
+            tagger_llm_model=str(data.get("tagger_llm_model", "") or ""),
+            tagger_llm_presets=_migrate_llm_presets(data),
+            tagger_llm_active_preset=int(data.get("tagger_llm_active_preset", 0) or 0),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -463,6 +546,21 @@ class ConfigBundle:
 
 
 @dataclass
+class ParsedTag:
+    name: str = ""
+    is_valid: bool = False
+    category_id: int = 0
+    translation: str = ""
+
+
+@dataclass
+class LLMTagResult:
+    image_path: str = ""
+    raw_text: str = ""
+    parsed_tags: list[ParsedTag] = field(default_factory=list)
+
+
+@dataclass
 class AppState:
     settings: AppSettings = field(default_factory=AppSettings)
     window: WindowState = field(default_factory=WindowState)
@@ -471,6 +569,7 @@ class AppState:
     prompts: list[PromptEntry] = field(default_factory=list)
     examples: list[ExampleEntry] = field(default_factory=list)
     input_history: str = ""
+    floating_tray: FloatingTrayState = field(default_factory=FloatingTrayState)
 
     @classmethod
     def default(cls) -> "AppState":
@@ -541,6 +640,7 @@ class AppState:
         state.examples = [ExampleEntry.from_dict(item) for item in examples] if examples else state.examples
         state.widgets = [WidgetState.from_dict(item) for item in widgets] or state.widgets
         state.input_history = str(data.get("input_history", ""))
+        state.floating_tray = FloatingTrayState.from_dict(data.get("floating_tray", {}))
         return state
 
     def to_dict(self) -> dict[str, Any]:
@@ -552,4 +652,5 @@ class AppState:
             "prompts": [item.to_dict() for item in self.prompts],
             "examples": [item.to_dict() for item in self.examples],
             "input_history": self.input_history,
+            "floating_tray": self.floating_tray.to_dict(),
         }

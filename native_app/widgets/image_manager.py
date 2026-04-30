@@ -55,7 +55,7 @@ from ..i18n import Translator
 from ..metadata import MetadataReader, MetadataWriter, ImageMetadata
 from ..metadata.thumb_cache import ThumbCache
 from ..theme import _fs, current_palette, is_theme_light
-from ..ui_tokens import CLS_METADATA_TEXT
+from ..ui_tokens import CLS_METADATA_TEXT, _dp
 from .collapsible_section import CollapsibleSection
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -175,8 +175,8 @@ class _StyledDialog(QWidget):
         surface.setObjectName("DialogSurface")
 
         layout = QVBoxLayout(surface)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(_dp(20), _dp(16), _dp(20), _dp(16))
+        layout.setSpacing(_dp(12))
 
         title_lbl = QLabel(title, surface)
         title_lbl.setStyleSheet(f"font-size: {_fs('fs_13')}; font-weight: bold; color: {p['text']};")
@@ -202,7 +202,7 @@ class _StyledDialog(QWidget):
                 layout.addWidget(msg)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row.setSpacing(_dp(8))
         btn_row.addStretch()
         cancel_btn = QPushButton(cancel, surface)
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -218,7 +218,7 @@ class _StyledDialog(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(surface)
-        self.setFixedWidth(320)
+        self.setFixedWidth(_dp(320))
         self.adjustSize()
 
     def _accept(self):
@@ -777,8 +777,8 @@ class DetailPanel(QWidget):
         self.setObjectName("ImDetail")
         self._t = translator
         self._reader = MetadataReader()
-        self.setMinimumWidth(320)
-        self.resize(360, 520)
+        self.setMinimumWidth(_dp(320))
+        self.resize(_dp(360), _dp(520))
         self._pinned = False
 
         # Window flags: Tool type for interactive content, no focus steal
@@ -813,7 +813,7 @@ class DetailPanel(QWidget):
 
         # ── Layout: breathing, hierarchical, restrained ──
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 12, 20, 14)
+        root.setContentsMargins(_dp(20), _dp(12), _dp(20), _dp(14))
         root.setSpacing(0)
 
         # Top bar: drag hint + pin
@@ -825,22 +825,22 @@ class DetailPanel(QWidget):
         top_row.addWidget(drag_hint)
         top_row.addStretch()
         self._float_pin_btn = QPushButton("📌", self)
-        self._float_pin_btn.setFixedSize(20, 20)
+        self._float_pin_btn.setFixedSize(_dp(20), _dp(20))
         self._float_pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._float_pin_btn.setStyleSheet(f"background: transparent; border: none; color: {_p()['text_dim']}; font-size: {_fs('fs_11')};")
         self._float_pin_btn.clicked.connect(self._toggle_float_pin)
         top_row.addWidget(self._float_pin_btn)
         root.addLayout(top_row)
-        root.addSpacing(4)
+        root.addSpacing(_dp(4))
 
         # Preview — generous space
         self._preview = QLabel(self)
         self._preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview.setMinimumHeight(160)
+        self._preview.setMinimumHeight(_dp(160))
         self._preview.setStyleSheet("background: transparent; padding: 4px;")
         root.addWidget(self._preview)
 
-        root.addSpacing(12)
+        root.addSpacing(_dp(12))
 
         # File info — subtle, small, letter-spaced
         p = _p()
@@ -854,24 +854,24 @@ class DetailPanel(QWidget):
         root.addWidget(self._info)
 
         # Thin separator
-        root.addSpacing(10)
+        root.addSpacing(_dp(10))
         sep1 = QWidget(self)
         sep1.setFixedHeight(1)
         sep1.setStyleSheet(f"background: {p['line']}; margin: 0 4px;")
         root.addWidget(sep1)
-        root.addSpacing(8)
+        root.addSpacing(_dp(8))
 
         # Prompt preview — just first line, muted
         self._prompt_preview = QLabel(self)
         self._prompt_preview.setWordWrap(True)
-        self._prompt_preview.setMaximumHeight(48)
+        self._prompt_preview.setMaximumHeight(_dp(48))
         self._prompt_preview.setStyleSheet(
             f"color: {p['text_muted']}; font-size: {_fs('fs_11')}; "
             f"background: transparent; border: none; padding: 0;"
         )
         root.addWidget(self._prompt_preview)
 
-        root.addSpacing(6)
+        root.addSpacing(_dp(6))
 
         # Scrollable sections — more detail
         scroll = QScrollArea(self)
@@ -882,21 +882,21 @@ class DetailPanel(QWidget):
         self._sw = QWidget()
         self._sl = QVBoxLayout(self._sw)
         self._sl.setContentsMargins(0, 0, 0, 0)
-        self._sl.setSpacing(8)
+        self._sl.setSpacing(_dp(8))
         scroll.setWidget(self._sw)
         root.addWidget(scroll, 1)
 
         # Separator before actions
-        root.addSpacing(8)
+        root.addSpacing(_dp(8))
         sep2 = QWidget(self)
         sep2.setFixedHeight(1)
         sep2.setStyleSheet(f"background: {p['line']}; margin: 0 4px;")
         root.addWidget(sep2)
-        root.addSpacing(10)
+        root.addSpacing(_dp(10))
 
         # Actions — spaced, light, restrained
         row = QHBoxLayout()
-        row.setSpacing(6)
+        row.setSpacing(_dp(6))
         btn_style = (
             f"background: transparent; border: 1px solid {p['line']}; "
             f"border-radius: 4px; color: {p['text_muted']}; font-size: {_fs('fs_10')}; "
@@ -1079,7 +1079,7 @@ class DetailPanel(QWidget):
         te.setProperty("class", CLS_METADATA_TEXT)
         te.setPlainText(text)
         te.setReadOnly(True)
-        te.setMaximumHeight(90)
+        te.setMaximumHeight(_dp(90))
         return te
 
     def _copy(self):
@@ -1133,8 +1133,8 @@ class ImageManagerWindow(QWidget):
         self._nav_history: list[str] = []
         self._nav_future: list[str] = []
         # Resize/drag handled by nativeEvent + WM_NCHITTEST
-        self.resize(1080, 740)
-        self.setMinimumSize(640, 420)
+        self.resize(_dp(1080), _dp(740))
+        self.setMinimumSize(_dp(640), _dp(420))
         self._build()
 
     def _build(self):
@@ -1145,7 +1145,7 @@ class ImageManagerWindow(QWidget):
         self._surface = QWidget(self)
         self._surface.setObjectName("ImSurface")
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(4, 4, 4, 4)
+        outer.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
         outer.addWidget(self._surface)
 
         root = QVBoxLayout(self._surface)
@@ -1155,10 +1155,10 @@ class ImageManagerWindow(QWidget):
         # ── Title bar ──
         tb = QWidget(self._surface)
         tb.setObjectName("ImTitleBar")
-        tb.setFixedHeight(38)
+        tb.setFixedHeight(_dp(38))
         tbl = QHBoxLayout(tb)
-        tbl.setContentsMargins(16, 0, 8, 0)
-        tbl.setSpacing(8)
+        tbl.setContentsMargins(_dp(16), 0, _dp(8), 0)
+        tbl.setSpacing(_dp(8))
 
         title = QLabel(self._t.t("image_manager"), tb)
         title.setObjectName("ImTitleLabel")
@@ -1169,7 +1169,7 @@ class ImageManagerWindow(QWidget):
         self._folder_btn = QPushButton(self._t.t("im_select_folder"), tb)
         self._folder_btn.setObjectName("ImToolBtn")
         self._folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._folder_btn.setFixedHeight(24)
+        self._folder_btn.setFixedHeight(_dp(24))
         self._folder_btn.clicked.connect(self._select_folder)
         tbl.addWidget(self._folder_btn)
 
@@ -1192,7 +1192,7 @@ class ImageManagerWindow(QWidget):
 
         self._pin_btn = QPushButton("📌", tb)
         self._pin_btn.setObjectName("ImTitleBtn")
-        self._pin_btn.setFixedSize(30, 26)
+        self._pin_btn.setFixedSize(_dp(30), _dp(26))
         self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pin_btn.clicked.connect(lambda: self._toggle_pin())
         tbl.addWidget(self._pin_btn)
@@ -1200,7 +1200,7 @@ class ImageManagerWindow(QWidget):
         for text, slot in [("—", self._minimize), ("✕", self.close)]:
             btn = QPushButton(text, tb)
             btn.setObjectName("ImTitleBtn")
-            btn.setFixedSize(30, 26)
+            btn.setFixedSize(_dp(30), _dp(26))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(slot)
             tbl.addWidget(btn)
@@ -1211,10 +1211,10 @@ class ImageManagerWindow(QWidget):
         # ── Toolbar ──
         bar = QWidget(self._surface)
         bar.setObjectName("ImToolbar")
-        bar.setFixedHeight(34)
+        bar.setFixedHeight(_dp(34))
         bl = QHBoxLayout(bar)
-        bl.setContentsMargins(16, 0, 16, 0)
-        bl.setSpacing(16)
+        bl.setContentsMargins(_dp(16), 0, _dp(16), 0)
+        bl.setSpacing(_dp(16))
 
         for label_key, widget in self._toolbar_widgets(bar):
             lbl = QLabel(label_key, bar)
@@ -1335,14 +1335,14 @@ class ImageManagerWindow(QWidget):
         spin = QSpinBox(parent)
         spin.setRange(10, 500)
         spin.setValue(50)
-        spin.setFixedWidth(60)
+        spin.setFixedWidth(_dp(60))
         self._buf_spin = spin
         items.append((self._t.t("im_buffer_size"), spin))
 
         slider = QSlider(Qt.Orientation.Horizontal, parent)
         slider.setRange(96, 256)
         slider.setValue(self._ts)
-        slider.setFixedWidth(100)
+        slider.setFixedWidth(_dp(100))
         slider.valueChanged.connect(self._on_size)
         self._slider = slider
         items.append((self._t.t("im_thumb_size"), slider))

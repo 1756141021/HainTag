@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -23,6 +24,8 @@ from PyQt6.QtWidgets import (
 from ..i18n import Translator
 from ..models import (
     AppSettings,
+    SEND_MODE_CTRL_ENTER,
+    SEND_MODE_ENTER,
     CONFIG_FINE_SCOPES,
     CONFIG_SCOPE_APPEARANCE,
     CONFIG_SCOPE_ARTIST_LIBRARY,
@@ -75,7 +78,7 @@ class SettingsPanel(QWidget):
 
         header = QLabel(self)
         header.setObjectName('PanelHeader')
-        header.setContentsMargins(16, 12, 16, 12)
+        header.setContentsMargins(_dp(16), _dp(12), _dp(16), _dp(12))
         self.header_label = header
         root.addWidget(header)
 
@@ -88,8 +91,8 @@ class SettingsPanel(QWidget):
         body = QWidget(scroller)
         scroller.setWidget(body)
         self.body_layout = QVBoxLayout(body)
-        self.body_layout.setContentsMargins(16, 8, 16, 16)
-        self.body_layout.setSpacing(10)
+        self.body_layout.setContentsMargins(_dp(16), _dp(8), _dp(16), _dp(16))
+        self.body_layout.setSpacing(_dp(10))
 
         self.language_label = self._add_label(body)
         self.language_combo = QComboBox(body)
@@ -97,13 +100,19 @@ class SettingsPanel(QWidget):
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
         self.body_layout.addWidget(self.language_combo)
 
+        self.send_mode_label = self._add_label(body)
+        self.send_mode_combo = QComboBox(body)
+        self.send_mode_combo.setProperty('class', CLS_FIELD_COMBO)
+        self.send_mode_combo.currentIndexChanged.connect(self.settings_changed)
+        self.body_layout.addWidget(self.send_mode_combo)
+
         self.api_label = self._add_label(body)
         self.api_base_url = self._add_line_edit(body, 'https://api.openai.com/v1')
 
         self.api_key_label = self._add_label(body)
         key_row = QHBoxLayout()
         key_row.setContentsMargins(0, 0, 0, 0)
-        key_row.setSpacing(6)
+        key_row.setSpacing(_dp(6))
         self.api_key = QLineEdit(body)
         self.api_key.setProperty('class', CLS_FIELD_INPUT)
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -120,7 +129,7 @@ class SettingsPanel(QWidget):
         self.model_label = self._add_label(body)
         model_row = QHBoxLayout()
         model_row.setContentsMargins(0, 0, 0, 0)
-        model_row.setSpacing(6)
+        model_row.setSpacing(_dp(6))
         self.model_combo = QComboBox(body)
         self.model_combo.setEditable(True)
         self.model_combo.setProperty('class', CLS_FIELD_COMBO)
@@ -163,10 +172,16 @@ class SettingsPanel(QWidget):
         self.stream_label, self.stream_toggle = self._add_toggle_row(body)
         self.memory_label, self.memory_toggle = self._add_toggle_row(body)
 
+        self.history_retention_label = self._add_label(body)
+        self.history_retention_combo = QComboBox(body)
+        self.history_retention_combo.setProperty('class', CLS_FIELD_COMBO)
+        self.history_retention_combo.currentIndexChanged.connect(self.settings_changed)
+        self.body_layout.addWidget(self.history_retention_combo)
+
         self.summary_prompt_label = self._add_label(body)
         self.summary_prompt_edit = QTextEdit(body)
         self.summary_prompt_edit.setProperty('class', CLS_SUMMARY_TEXT)
-        self.summary_prompt_edit.setMinimumHeight(120)
+        self.summary_prompt_edit.setMinimumHeight(_dp(120))
         self.summary_prompt_edit.textChanged.connect(self.settings_changed)
         self.body_layout.addWidget(self.summary_prompt_edit)
 
@@ -185,7 +200,7 @@ class SettingsPanel(QWidget):
         def _inline_row(label_text, spin):
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(6)
+            row.setSpacing(_dp(6))
             lbl = QLabel(label_text, body)
             lbl.setProperty('class', CLS_FIELD_LABEL)
             lbl.setFixedWidth(_dp(90))
@@ -210,7 +225,7 @@ class SettingsPanel(QWidget):
         def _marker_row(label_start, label_end, default_start, default_end):
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(4)
+            row.setSpacing(_dp(4))
             start_edit = QLineEdit(body)
             start_edit.setProperty('class', CLS_FIELD_INPUT)
             start_edit.setText(default_start)
@@ -245,7 +260,7 @@ class SettingsPanel(QWidget):
 
         io_row = QHBoxLayout()
         io_row.setContentsMargins(0, 0, 0, 0)
-        io_row.setSpacing(8)
+        io_row.setSpacing(_dp(8))
         self.export_button = QPushButton(body)
         self.export_button.setObjectName('SecondaryButton')
         self.export_button.clicked.connect(self._show_export_menu)
@@ -295,7 +310,7 @@ class SettingsPanel(QWidget):
     def _add_slider(self, parent: QWidget, minimum: int, maximum: int, default: int) -> tuple[QSlider, QLabel, QLabel]:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
+        row.setSpacing(_dp(6))
         label = QLabel(parent)
         label.setProperty('class', CLS_FIELD_LABEL)
         row.addWidget(label)
@@ -315,7 +330,7 @@ class SettingsPanel(QWidget):
     def _add_toggle_row(self, parent: QWidget) -> tuple[QLabel, ToggleSwitch]:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
+        row.setSpacing(_dp(8))
         label = QLabel(parent)
         label.setProperty('class', CLS_FIELD_LABEL)
         row.addWidget(label)
@@ -344,25 +359,87 @@ class SettingsPanel(QWidget):
     def _show_import_menu(self) -> None:
         self._show_io_dialog(self._translator.t('import'), is_export=False)
 
+    _IO_GROUPS: list[tuple[str, list[str]]] = [
+        ("io_group_settings", [
+            CONFIG_SCOPE_APPEARANCE, CONFIG_SCOPE_MODEL_PARAMS,
+            CONFIG_SCOPE_ENTRY_DEFAULTS, CONFIG_SCOPE_TAG_MARKERS,
+        ]),
+        ("io_group_content", [
+            CONFIG_SCOPE_PROMPTS, CONFIG_SCOPE_EXAMPLES,
+            CONFIG_SCOPE_OC_LIBRARY, CONFIG_SCOPE_ARTIST_LIBRARY,
+            CONFIG_SCOPE_HISTORY,
+        ]),
+        ("io_group_window", [
+            CONFIG_SCOPE_WINDOW_LAYOUT,
+        ]),
+    ]
+
     def _show_io_dialog(self, title: str, *, is_export: bool) -> None:
+        from ..theme import current_palette, _fs
+
+        pal = current_palette()
+
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
-        dlg.setFixedWidth(_dp(320))
+        dlg.setObjectName('PopupPanel')
+        dlg.setFixedWidth(_dp(360))
+        dlg.setStyleSheet(
+            f"QDialog#PopupPanel {{ background: {pal['bg_surface']}; "
+            f"border: 1px solid {pal['line_hover']}; border-radius: 10px; }}"
+        )
+
         layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(_dp(14), _dp(14), _dp(14), _dp(14))
+        layout.setContentsMargins(_dp(16), _dp(16), _dp(16), _dp(16))
         layout.setSpacing(_dp(8))
+
+        title_label = QLabel(title, dlg)
+        title_label.setStyleSheet(
+            f"font-size: {_fs('fs_14')}; font-weight: bold; color: {pal['text']};"
+        )
+        layout.addWidget(title_label)
+
+        sep = QFrame(dlg)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background: {pal['line']}; border: none;")
+        layout.addWidget(sep)
+        layout.addSpacing(_dp(6))
 
         scope_labels = self._config_scope_labels()
         config_boxes: list[tuple[str, QCheckBox]] = []
-        for scope in CONFIG_FINE_SCOPES:
-            cb = QCheckBox(scope_labels.get(scope, scope), dlg)
-            cb.setChecked(True)
-            layout.addWidget(cb)
-            config_boxes.append((scope, cb))
+
+        for group_key, scopes in self._IO_GROUPS:
+            card = QWidget(dlg)
+            card.setStyleSheet(
+                f"background: {pal['bg_input']}; "
+                f"border: 1px solid {pal['line']}; border-radius: 6px;"
+            )
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(_dp(10), _dp(8), _dp(10), _dp(8))
+            card_layout.setSpacing(_dp(4))
+
+            group_label = QLabel(self._translator.t(group_key), card)
+            group_label.setStyleSheet(
+                f"font-size: {_fs('fs_10')}; color: {pal['text_label']}; "
+                f"font-weight: 500; border: none; padding: 0; margin: 0;"
+            )
+            card_layout.addWidget(group_label)
+
+            for scope in scopes:
+                cb = QCheckBox(scope_labels.get(scope, scope), card)
+                cb.setChecked(True)
+                cb.setStyleSheet("border: none;")
+                card_layout.addWidget(cb)
+                config_boxes.append((scope, cb))
+
+            layout.addWidget(card)
+
+        layout.addSpacing(_dp(8))
 
         tools_row = QHBoxLayout()
         tools_row.setContentsMargins(0, 0, 0, 0)
         tools_row.setSpacing(_dp(6))
+        tools_row.addStretch()
         select_all_btn = QPushButton(self._translator.t('select_all'), dlg)
         select_all_btn.setObjectName('SecondaryButton')
         clear_btn = QPushButton(self._translator.t('select_none'), dlg)
@@ -373,26 +450,22 @@ class SettingsPanel(QWidget):
         tools_row.addWidget(clear_btn)
         layout.addLayout(tools_row)
 
-        cb_prompts_file = QCheckBox(self._translator.t('export_prompts_item'), dlg)
-        layout.addWidget(cb_prompts_file)
+        layout.addSpacing(_dp(12))
 
         btn = QPushButton(title, dlg)
-        btn.setObjectName('SecondaryButton')
+        btn.setObjectName('PrimaryButton')
         btn.clicked.connect(dlg.accept)
         layout.addWidget(btn)
+
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         checked_scopes = [scope for scope, cb in config_boxes if cb.isChecked()]
         if is_export:
             if checked_scopes:
                 self.config_export_requested.emit(checked_scopes)
-            if cb_prompts_file.isChecked():
-                self.export_prompts_requested.emit()
         else:
             if checked_scopes:
                 self.config_import_requested.emit(checked_scopes)
-            if cb_prompts_file.isChecked():
-                self.import_prompts_requested.emit()
 
     def _config_scope_labels(self) -> dict[str, str]:
         return {
@@ -457,12 +530,14 @@ class SettingsPanel(QWidget):
             max_tokens=int(self.max_tokens_spin.value()),
             stream=self.stream_toggle.isChecked(),
             memory_mode=self.memory_toggle.isChecked(),
+            send_mode=str(self.send_mode_combo.currentData() or SEND_MODE_ENTER),
             summary_prompt=self.summary_prompt_edit.toPlainText(),
             language=str(self.language_combo.currentData()),
             ui_scale_percent=self._ui_scale_percent,
             body_font_point_size=self._body_font_point_size,
             font_profile=self._font_profile,
             custom_font_id=self._custom_font_id,
+            history_retention_days=int(self.history_retention_combo.currentData() or 30),
             default_example_order=self._def_example_order.value(),
             default_example_depth=self._def_example_depth.value(),
             default_oc_order=self._def_oc_order.value(),
@@ -485,6 +560,8 @@ class SettingsPanel(QWidget):
         self.max_tokens_spin.setValue(settings.max_tokens)
         self.stream_toggle.setChecked(settings.stream)
         self.memory_toggle.setChecked(settings.memory_mode)
+        send_mode_index = max(0, self.send_mode_combo.findData(settings.send_mode))
+        self.send_mode_combo.setCurrentIndex(send_mode_index)
         self.summary_prompt_edit.setPlainText(settings.summary_prompt)
         language_index = max(0, self.language_combo.findData(settings.language))
         self.language_combo.setCurrentIndex(language_index)
@@ -492,6 +569,8 @@ class SettingsPanel(QWidget):
         self._body_font_point_size = settings.body_font_point_size
         self._font_profile = settings.font_profile
         self._custom_font_id = settings.custom_font_id
+        history_retention_index = max(0, self.history_retention_combo.findData(settings.history_retention_days))
+        self.history_retention_combo.setCurrentIndex(history_retention_index)
         self._def_example_order.setValue(settings.default_example_order)
         self._def_example_depth.setValue(settings.default_example_depth)
         self._def_oc_order.setValue(settings.default_oc_order)
@@ -516,6 +595,17 @@ class SettingsPanel(QWidget):
         self.language_combo.setCurrentIndex(language_index)
         self.language_combo.blockSignals(False)
 
+        current_send_mode = self.send_mode_combo.currentData()
+        self.send_mode_label.setText(self._translator.t('send_mode'))
+        self.send_mode_label.setToolTip(self._translator.t('tip_send_mode'))
+        self.send_mode_combo.blockSignals(True)
+        self.send_mode_combo.clear()
+        self.send_mode_combo.addItem(self._translator.t('send_mode_enter'), SEND_MODE_ENTER)
+        self.send_mode_combo.addItem(self._translator.t('send_mode_ctrl_enter'), SEND_MODE_CTRL_ENTER)
+        send_mode_index = max(0, self.send_mode_combo.findData(current_send_mode or SEND_MODE_ENTER))
+        self.send_mode_combo.setCurrentIndex(send_mode_index)
+        self.send_mode_combo.blockSignals(False)
+
         self.api_label.setText(self._translator.t('api_base_url'))
         self.api_key_label.setText(self._translator.t('api_key'))
         self.eye_button.setToolTip(self._translator.t('show_hide'))
@@ -537,6 +627,17 @@ class SettingsPanel(QWidget):
         self.stream_label.setToolTip(self._translator.t('tip_stream'))
         self.memory_label.setText(self._translator.t('memory_mode'))
         self.memory_label.setToolTip(self._translator.t('tip_memory'))
+        current_history_retention = self.history_retention_combo.currentData()
+        self.history_retention_label.setText(self._translator.t('history_retention'))
+        self.history_retention_label.setToolTip(self._translator.t('tip_history_retention'))
+        self.history_retention_combo.blockSignals(True)
+        self.history_retention_combo.clear()
+        for days in (0, 7, 30, 90):
+            key = 'history_retention_never' if days == 0 else f'history_retention_{days}'
+            self.history_retention_combo.addItem(self._translator.t(key), days)
+        history_retention_index = max(0, self.history_retention_combo.findData(current_history_retention if current_history_retention is not None else 30))
+        self.history_retention_combo.setCurrentIndex(history_retention_index)
+        self.history_retention_combo.blockSignals(False)
         self.summary_prompt_label.setText(self._translator.t('summary_prompt'))
         self.summary_prompt_label.setToolTip(self._translator.t('tip_summary_prompt'))
         self.defaults_label.setText(self._translator.t('entry_defaults'))

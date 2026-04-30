@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 from ..i18n import Translator
 from ..metadata import MetadataReader, ImageMetadata
 from ..theme import current_palette, is_theme_light
-from ..ui_tokens import CLS_FIELD_LABEL, CLS_METADATA_FRAME, CLS_METADATA_TEXT
+from ..ui_tokens import CLS_FIELD_LABEL, CLS_METADATA_FRAME, CLS_METADATA_TEXT, _dp
 from .collapsible_section import CollapsibleSection
 
 
@@ -121,14 +121,14 @@ class MetadataViewerWidget(QWidget):
         self._content_page = QWidget(self)
         content_root = QVBoxLayout(self._content_page)
         content_root.setContentsMargins(0, 0, 0, 0)
-        content_root.setSpacing(6)
+        content_root.setSpacing(_dp(6))
 
         # Top bar: thumbnail + file info + close button
         top_row = QHBoxLayout()
-        top_row.setSpacing(8)
+        top_row.setSpacing(_dp(8))
 
         self._thumbnail = QLabel(self._content_page)
-        self._thumbnail.setFixedSize(80, 80)
+        self._thumbnail.setFixedSize(_dp(80), _dp(80))
         self._thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
         p = current_palette()
         self._thumbnail.setStyleSheet(f"border: 1px solid {p['line']}; border-radius: 4px;")
@@ -146,15 +146,15 @@ class MetadataViewerWidget(QWidget):
         info_col.addWidget(self._generator_label)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(4)
+        btn_row.setSpacing(_dp(4))
         self._change_btn = QPushButton(self._translator.t("metadata_change_file"), self._content_page)
         self._change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._change_btn.clicked.connect(self._pick_file)
-        self._change_btn.setFixedHeight(22)
+        self._change_btn.setFixedHeight(_dp(22))
         btn_row.addWidget(self._change_btn)
 
         self._close_btn = QPushButton("✕", self._content_page)
-        self._close_btn.setFixedSize(22, 22)
+        self._close_btn.setFixedSize(_dp(22), _dp(22))
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setToolTip(self._translator.t("close"))
         self._close_btn.clicked.connect(self._back_to_empty)
@@ -174,7 +174,7 @@ class MetadataViewerWidget(QWidget):
         self._scroll_content = QWidget()
         self._sections_layout = QVBoxLayout(self._scroll_content)
         self._sections_layout.setContentsMargins(0, 0, 0, 0)
-        self._sections_layout.setSpacing(4)
+        self._sections_layout.setSpacing(_dp(4))
         scroll.setWidget(self._scroll_content)
         content_root.addWidget(scroll, 1)
 
@@ -329,13 +329,13 @@ class MetadataViewerWidget(QWidget):
         edit.setProperty("class", CLS_METADATA_TEXT)
         edit.setPlainText(text)
         edit.setReadOnly(True)
-        edit.setMaximumHeight(120)
+        edit.setMaximumHeight(_dp(120))
         edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         return wrap_with_resize_handle(edit, self._scroll_content)
 
     def _make_copy_btn(self, callback) -> QPushButton:
         btn = QPushButton(self._translator.t("copy"), self._scroll_content)
-        btn.setFixedHeight(20)
+        btn.setFixedHeight(_dp(20))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(callback)
         return btn

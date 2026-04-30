@@ -113,8 +113,8 @@ class _ResultRow(QWidget):
         self._dst_path = dst_path
         self._translator = translator
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 2, 4, 2)
-        row.setSpacing(6)
+        row.setContentsMargins(_dp(4), 2, _dp(4), 2)
+        row.setSpacing(_dp(6))
         if error:
             row.addWidget(QLabel(f"\u2717 {filename} \u2014 {error}", self), 1)
         else:
@@ -198,8 +198,8 @@ class MetadataDestroyerWidget(QWidget):
         # Single image bottom bar
         self._single_bar = QWidget(self)
         bar_layout = QHBoxLayout(self._single_bar)
-        bar_layout.setContentsMargins(4, 4, 4, 4)
-        bar_layout.setSpacing(6)
+        bar_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        bar_layout.setSpacing(_dp(6))
         self._single_name_label = QLabel(self._single_bar)
         bar_layout.addWidget(self._single_name_label, 1)
         self._single_edit_btn = QPushButton(self._translator.t("metadata_edit_single"), self._single_bar)
@@ -218,8 +218,8 @@ class MetadataDestroyerWidget(QWidget):
         # Batch results header
         self._batch_header = QWidget(self)
         header_layout = QHBoxLayout(self._batch_header)
-        header_layout.setContentsMargins(4, 4, 4, 0)
-        header_layout.setSpacing(6)
+        header_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), 0)
+        header_layout.setSpacing(_dp(6))
         self._results_label = QLabel(self._batch_header)
         header_layout.addWidget(self._results_label, 1)
         self._save_all_btn = QPushButton(self._translator.t("metadata_save_all"), self._batch_header)
@@ -423,7 +423,7 @@ class MetadataDestroyerWidget(QWidget):
         self._edit_positive = QTextEdit(self._results_content)
         self._edit_positive.setProperty("class", CLS_METADATA_TEXT)
         self._edit_positive.setPlainText(meta.positive_prompt)
-        self._edit_positive.setMaximumHeight(120)
+        self._edit_positive.setMaximumHeight(_dp(120))
         pos_container = wrap_with_resize_handle(self._edit_positive, self._results_content)
         pos_section = CollapsibleSection(
             self._translator.t("metadata_positive"),
@@ -435,7 +435,7 @@ class MetadataDestroyerWidget(QWidget):
         self._edit_negative = QTextEdit(self._results_content)
         self._edit_negative.setProperty("class", CLS_METADATA_TEXT)
         self._edit_negative.setPlainText(meta.negative_prompt)
-        self._edit_negative.setMaximumHeight(120)
+        self._edit_negative.setMaximumHeight(_dp(120))
         neg_container = wrap_with_resize_handle(self._edit_negative, self._results_content)
         neg_section = CollapsibleSection(
             self._translator.t("metadata_negative"),
@@ -445,9 +445,9 @@ class MetadataDestroyerWidget(QWidget):
 
         fields = QWidget(self._results_content)
         grid = QGridLayout(fields)
-        grid.setContentsMargins(4, 4, 4, 4)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(6)
+        grid.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        grid.setHorizontalSpacing(_dp(8))
+        grid.setVerticalSpacing(_dp(6))
         p = current_palette()
         fields.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_10')};")
 
@@ -507,8 +507,8 @@ class MetadataDestroyerWidget(QWidget):
 
         lora_box = QWidget(self._results_content)
         self._lora_layout = QVBoxLayout(lora_box)
-        self._lora_layout.setContentsMargins(4, 4, 4, 4)
-        self._lora_layout.setSpacing(4)
+        self._lora_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        self._lora_layout.setSpacing(_dp(4))
         for item in meta.loras:
             self._add_lora_row(str(item.get("name", "")), str(item.get("weight", "1")))
         add_lora_btn = QPushButton(self._translator.t("metadata_add_lora"), lora_box)
@@ -532,7 +532,7 @@ class MetadataDestroyerWidget(QWidget):
         row = QWidget(self._results_content)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(_dp(6))
         name_edit = QLineEdit(name, row)
         name_edit.setPlaceholderText(self._translator.t("metadata_lora_name"))
         weight_spin = QDoubleSpinBox(row)

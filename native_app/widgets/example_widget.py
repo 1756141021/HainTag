@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from ..i18n import Translator
 from ..models import ExampleEntry
 from ..storage import AppStorage
+from ..theme import _fs, current_palette
 from ..ui_tokens import (
     CLS_EXAMPLE_DELETE_BUTTON,
     CLS_EXAMPLE_FRAME,
@@ -26,6 +27,7 @@ from ..ui_tokens import (
     CLS_FIELD_LABEL,
     CLS_FIELD_SPIN,
     CLS_IMAGE_SELECT_BUTTON,
+    _dp,
 )
 
 
@@ -43,16 +45,16 @@ class ExampleWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(8)
+        root.setSpacing(_dp(8))
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(8)
+        top_row.setSpacing(_dp(8))
 
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
-        form.setHorizontalSpacing(6)
-        form.setVerticalSpacing(6)
+        form.setHorizontalSpacing(_dp(6))
+        form.setVerticalSpacing(_dp(6))
 
         self.order_label = QLabel(self)
         self.order_label.setProperty("class", CLS_FIELD_LABEL)
@@ -77,7 +79,7 @@ class ExampleWidget(QWidget):
 
         self.image_button = QPushButton(self)
         self.image_button.setProperty("class", CLS_IMAGE_SELECT_BUTTON)
-        self.image_button.setFixedSize(112, 112)
+        self.image_button.setFixedSize(_dp(112), _dp(112))
         self.image_button.clicked.connect(self._select_image)
         top_row.addWidget(self.image_button)
 
@@ -95,7 +97,7 @@ class ExampleWidget(QWidget):
         from .resize_handle import wrap_with_resize_handle
         self.tags_edit = QTextEdit(self)
         self.tags_edit.setProperty("class", CLS_EXAMPLE_TEXT)
-        self.tags_edit.setMaximumHeight(92)
+        self.tags_edit.setMaximumHeight(_dp(92))
         self.tags_edit.setPlainText(entry.tags)
         self.tags_edit.textChanged.connect(self.changed)
         root.addWidget(wrap_with_resize_handle(self.tags_edit, self))
@@ -106,14 +108,15 @@ class ExampleWidget(QWidget):
 
         self.description_edit = QTextEdit(self)
         self.description_edit.setProperty("class", CLS_EXAMPLE_TEXT)
-        self.description_edit.setMaximumHeight(108)
+        self.description_edit.setMaximumHeight(_dp(108))
         self.description_edit.setPlainText(entry.description)
         self.description_edit.textChanged.connect(self.changed)
         root.addWidget(wrap_with_resize_handle(self.description_edit, self))
 
         # Warning when incomplete
         self._warning_label = QLabel(self)
-        self._warning_label.setStyleSheet("color: #c08040; font-size: 10px; border: none; background: transparent;")
+        p = current_palette()
+        self._warning_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')}; border: none; background: transparent;")
         self._warning_label.hide()
         root.addWidget(self._warning_label)
         self.tags_edit.textChanged.connect(self._check_completeness)

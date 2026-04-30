@@ -33,6 +33,7 @@ from ..ui_tokens import (
     CLS_PROMPT_EXPAND_INDICATOR,
     CLS_PROMPT_NAME_PREVIEW,
     CLS_PROMPT_TEXT,
+    _dp,
 )
 from .common import DragHandleLabel, ToggleSwitch
 
@@ -62,14 +63,14 @@ class PromptEntryWidget(QFrame):
         self.header = QWidget(self)
         self.header.setProperty("class", CLS_PROMPT_ENTRY_HEADER)
         header_layout = QHBoxLayout(self.header)
-        header_layout.setContentsMargins(8, 5, 8, 5)
-        header_layout.setSpacing(5)
+        header_layout.setContentsMargins(_dp(8), _dp(5), _dp(8), _dp(5))
+        header_layout.setSpacing(_dp(5))
 
         self.order_spin = QSpinBox(self.header)
         self.order_spin.setMinimum(0)
         self.order_spin.setMaximum(9999)
         self.order_spin.setProperty("class", CLS_FIELD_SPIN)
-        self.order_spin.setFixedWidth(58)
+        self.order_spin.setFixedWidth(_dp(58))
         self.order_spin.setToolTip(translator.t("tip_order"))
         header_layout.addWidget(self.order_spin)
 
@@ -101,7 +102,7 @@ class PromptEntryWidget(QFrame):
 
         self.role_combo = QComboBox(self.header)
         self.role_combo.setProperty("class", CLS_FIELD_COMBO)
-        self.role_combo.setMinimumWidth(82)
+        self.role_combo.setMinimumWidth(_dp(82))
         header_layout.addWidget(self.role_combo)
 
         self.depth_label = QLabel(self.header)
@@ -112,7 +113,7 @@ class PromptEntryWidget(QFrame):
         self.depth_spin.setMinimum(0)
         self.depth_spin.setMaximum(999)
         self.depth_spin.setProperty("class", CLS_FIELD_SPIN)
-        self.depth_spin.setFixedWidth(58)
+        self.depth_spin.setFixedWidth(_dp(58))
         self.depth_spin.setToolTip(translator.t("tip_depth"))
         header_layout.addWidget(self.depth_spin)
 
@@ -132,12 +133,12 @@ class PromptEntryWidget(QFrame):
         self.body = QWidget(self)
         self.body.setProperty("class", CLS_PROMPT_ENTRY_BODY)
         body_layout = QVBoxLayout(self.body)
-        body_layout.setContentsMargins(8, 0, 8, 8)
+        body_layout.setContentsMargins(_dp(8), 0, _dp(8), _dp(8))
         body_layout.setSpacing(0)
 
         self.content_edit = QTextEdit(self.body)
         self.content_edit.setProperty("class", CLS_PROMPT_TEXT)
-        self.content_edit.setMinimumHeight(self._MIN_BODY_HEIGHT)
+        self.content_edit.setMinimumHeight(_dp(self._MIN_BODY_HEIGHT))
         self.content_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         body_layout.addWidget(self.content_edit)
         root.addWidget(self.body)
@@ -288,7 +289,7 @@ class PromptEntryWidget(QFrame):
         document_height = int(round(self.content_edit.document().size().height()))
         frame_height = self.content_edit.frameWidth() * 2
         padding_height = margins.top() + margins.bottom() + 20
-        return max(self._MIN_BODY_HEIGHT, min(self._MAX_BODY_HEIGHT, document_height + frame_height + padding_height))
+        return max(_dp(self._MIN_BODY_HEIGHT), min(_dp(self._MAX_BODY_HEIGHT), document_height + frame_height + padding_height))
 
     def _on_animation_value_changed(self, value) -> None:
         self._current_body_height = max(0, int(value))
@@ -318,7 +319,7 @@ class PromptListWidget(QListWidget):
         super().__init__(parent)
         self._translator = translator
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setSpacing(4)
+        self.setSpacing(_dp(4))
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
@@ -416,7 +417,7 @@ class PromptManagerWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(8)
+        root.setSpacing(_dp(8))
 
         self.list_widget = PromptListWidget(translator, self)
         self.list_widget.changed.connect(self.changed)
@@ -424,7 +425,7 @@ class PromptManagerWidget(QWidget):
 
         # Bottom row: add button + preview button
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(_dp(6))
         self.add_button = QPushButton(self)
         self.add_button.setObjectName("GhostButton")
         self.add_button.clicked.connect(self._add_prompt)
@@ -432,7 +433,7 @@ class PromptManagerWidget(QWidget):
         btn_row.addStretch()
         self.preview_button = QPushButton("⋯", self)
         self.preview_button.setObjectName("GhostButton")
-        self.preview_button.setFixedWidth(32)
+        self.preview_button.setFixedWidth(_dp(32))
         self.preview_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.preview_button.clicked.connect(self.preview_requested.emit)
         btn_row.addWidget(self.preview_button)

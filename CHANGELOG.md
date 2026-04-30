@@ -5,6 +5,67 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-04-30
+
+### Added
+- **发送方式切换** — 设置面板新增 `Enter` / `Ctrl+Enter` 发送模式，输入框 tooltip、快捷键面板、引导提示统一跟随当前模式
+- **浮窗存放台** — 多个拖出的浮动卡片重叠或靠近时会自动折叠进存放台，可按标题恢复，并持久化位置与成员关系
+- **标题栏语言快切** — 新增 `中 / EN` 快速切换按钮，不必每次都进入设置页
+
+### Changed
+- **右侧工作台轨道** — 生成历史和 Artist / OC 资料库改为共享同一条右侧侧栏轨道，减少重复开关和空间冲突
+- **记忆模式深度语义** — `build_messages()` 改为按“对话回合距离”插入 depth>0 条目，保留完整 user/assistant 回合，不再按裸 message 数打散上下文
+- **资料库布局** — Artist / OC 改为单入口标签切换侧栏，记住上次停留分区，减少操作冗余
+- **顶置反馈** — 主窗口和浮动卡片的置顶按钮改成统一的双态视觉、tooltip 和高亮反馈，恢复状态时与真实 window flag 同步
+
+### Fixed
+- **发送确认失效** — 输入区发送快捷键从全局 shortcut 下沉到编辑器级别，修复“设置可切换但实际无效”的问题
+- **生成历史可读性** — 历史记录现在按时间倒序、按天分组，支持复制输入/完整 TAG/无角色 TAG，并按设置自动清理旧记录
+- **语言切换漏改** — 引导、快捷键文案、历史侧栏、浮窗存放台和标题栏快速入口都能随语言切换即时刷新
+
+## [0.9.0] - 2026-04-26
+
+### Changed
+- **程序内更新** — "立即更新"按钮改为直接下载 ZIP + 自动替换 + 重启，不再打开浏览器手动操作
+  - 三级 HTTP fallback 下载（httpx→requests→urllib），进度条显示，支持取消
+  - ZIP 校验（testzip + 入口文件检查）+ 解压
+  - 批量替换脚本：robocopy /MIR 镜像同步，PID 等待循环，杀毒锁文件自动重试
+  - 源码模式（非 frozen）保持原有行为（打开浏览器）
+
+## [0.8.1] - 2026-04-26
+
+### Changed
+- **LLM 预设管理化** — 删除 5 个硬编码提示词预设（通用/详细/NSFW/简洁/自定义），替换为用户自管理的预设系统：combo 选择 + 新建/删除 + 名称/内容编辑，预设数量无限制
+- `AppSettings` 字段 `tagger_llm_prompt_preset` / `tagger_llm_custom_prompt` 替换为 `tagger_llm_presets`（list）/ `tagger_llm_active_preset`（int）
+- 旧配置自动迁移：`tagger_llm_custom_prompt` 非空时转为 `[{"name": "Custom", "text": 旧值}]`
+
+### Fixed
+- 独立 API 字段（URL/密钥/模型）编辑后未触发保存，重启丢失配置
+- `apply_llm_settings()` 初始化加载时误触 `settings_changed` 信号
+
+## [0.8.0] - 2026-04-26
+
+### Added
+- **LLM 反推批量推理** — 支持多图拖入/选择，逐张队列处理，进度显示，中途可停止
+- **提示词预设** — 通用/详细/NSFW/简洁/自定义 5 种预设切换，自定义预设可编辑并持久化
+- **结果结构化** — LLM 输出自动解析为独立 tag，有效 tag 按 Danbooru 分类着色，无效 tag 灰显，hover 显示中文翻译
+- **独立 API 配置** — LLM 反推可使用独立的 API 地址/密钥/模型，或共享主工作台配置
+- **FlowLayout** — tag 标签流式布局，自动换行排列
+
+### Changed
+- `_LLMTaggerTab` 完全重写：批量队列、预设选择、API 切换、折叠结果区域
+- `_DropZone` 支持 `multi=True` 多图模式，向后兼容单图模式
+- `InterrogatorWidget` 新增 `set_tag_dictionary()` / `apply_llm_settings()` / `collect_llm_settings()` 接口
+- `AppSettings` 新增 6 个 `tagger_llm_*` 字段，自动持久化
+- 配置导出安全约束扩展：`tagger_llm_api_key` 和 `tagger_llm_base_url` 也被屏蔽
+
+## [0.7.4] - 2026-04-26
+
+### Changed
+- **DPI 全量转换** — 全部 25 个 Python 文件中约 200 处硬编码像素值转换为 `_dp()` 调用，覆盖 window、所有 widget、dialog、panel、sidebar，1-2px 微小值和 0 值按规则跳过
+- **Interrogator i18n** — 图像反推模块约 37 处硬编码中文替换为 `translator.t()` 调用，新增 `interr_` 前缀翻译键（zh-CN + en）
+- **样式规范化** — example_widget 硬编码颜色 `#c08040` 和 `font-size: 10px` 改走 `current_palette()` 和 `_fs()`
+
 ## [0.7.3] - 2026-04-26
 
 ### Added

@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 from ..i18n import Translator
 from ..tag_dictionary import TagDictionary
 from ..theme import is_theme_light
+from ..ui_tokens import _dp
 
 # Regex to parse a single tag's weight: (tag:1.3) or plain tag
 _SD_WEIGHT_RE = re.compile(r'\(([^()]+):(\d+\.?\d*)\)')
@@ -466,14 +467,14 @@ class OutputWidget(QWidget):
         # Full TAG tab
         full_container = QWidget()
         full_layout = QVBoxLayout(full_container)
-        full_layout.setContentsMargins(4, 4, 4, 4)
-        full_layout.setSpacing(4)
+        full_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        full_layout.setSpacing(_dp(4))
         self.full_editor = TagTextEdit(full_container)
         self.full_editor.setProperty('class', 'OutputEditor')
         self.full_editor.textChanged.connect(self.changed)
         full_layout.addWidget(self.full_editor, 1)
         full_btn_row = QHBoxLayout()
-        full_btn_row.setSpacing(6)
+        full_btn_row.setSpacing(_dp(6))
         full_btn_row.addStretch()
         self.copy_full_button = QPushButton('', full_container)
         self.copy_full_button.setObjectName('SecondaryButton')
@@ -485,14 +486,14 @@ class OutputWidget(QWidget):
         # No-character TAG tab
         nochar_container = QWidget()
         nochar_layout = QVBoxLayout(nochar_container)
-        nochar_layout.setContentsMargins(4, 4, 4, 4)
-        nochar_layout.setSpacing(4)
+        nochar_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        nochar_layout.setSpacing(_dp(4))
         self.nochar_editor = TagTextEdit(nochar_container)
         self.nochar_editor.setProperty('class', 'OutputEditor')
         self.nochar_editor.textChanged.connect(self.changed)
         nochar_layout.addWidget(self.nochar_editor, 1)
         nochar_btn_row = QHBoxLayout()
-        nochar_btn_row.setSpacing(6)
+        nochar_btn_row.setSpacing(_dp(6))
         nochar_btn_row.addStretch()
         self.copy_nochar_button = QPushButton('', nochar_container)
         self.copy_nochar_button.setObjectName('SecondaryButton')

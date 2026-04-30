@@ -1,18 +1,13 @@
-"""Library Panel — two-step scroll drawer for Artist Library and OC Library.
-
-Design language: Hypergryph / Arknights — industrial frosted glass,
-restrained accent, geometric minimalism, line-driven, breathing room.
-"""
+"""Library panel widgets for artist and OC references."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QColor, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -28,6 +23,7 @@ from ..i18n import Translator
 from ..models import ArtistEntry, OCEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 from .common import ToggleSwitch
 
 _IMAGE_EXTS = "Images (*.png *.jpg *.jpeg *.webp *.bmp)"
@@ -90,16 +86,16 @@ class _RefImageGrid(QWidget):
         if vertical:
             self._layout = QVBoxLayout(self)
             self._layout.setContentsMargins(0, 2, 0, 2)
-            self._layout.setSpacing(6)
+            self._layout.setSpacing(_dp(6))
         else:
             self._layout = QHBoxLayout(self)
             self._layout.setContentsMargins(0, 2, 0, 2)
-            self._layout.setSpacing(4)
+            self._layout.setSpacing(_dp(4))
 
         self._add_btn = QPushButton("+", self)
         self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         if vertical:
-            self._add_btn.setFixedHeight(28)
+            self._add_btn.setFixedHeight(_dp(28))
         else:
             self._add_btn.setFixedSize(thumb_size, thumb_size)
         self._layout.addWidget(self._add_btn)
@@ -145,7 +141,7 @@ class _RefImageGrid(QWidget):
                         max(180, self.width() - 8),
                         Qt.TransformationMode.SmoothTransformation)
                     thumb.setPixmap(pm)
-                    thumb.setFixedHeight(pm.height() + 4)
+                    thumb.setFixedHeight(pm.height() + _dp(4))
                 thumb.setToolTip("Click to remove")
                 thumb.mousePressEvent = lambda _, idx=i: self._remove_image(idx)
                 self._layout.insertWidget(insert_pos, thumb)
@@ -213,12 +209,12 @@ class ArtistBanner(QWidget):
             f"background: {p['bg_surface']}; border: 1px solid {p['line']}; border-radius: 4px;"
         )
         hl = QHBoxLayout(self._header)
-        hl.setContentsMargins(10, 6, 6, 6)
-        hl.setSpacing(8)
+        hl.setContentsMargins(_dp(10), _dp(6), _dp(6), _dp(6))
+        hl.setSpacing(_dp(8))
 
         self._arrow = QLabel("▸", self._header)
         self._arrow.setStyleSheet(_arrow_style(p))
-        self._arrow.setFixedWidth(10)
+        self._arrow.setFixedWidth(_dp(10))
         hl.addWidget(self._arrow)
 
         self._name_label = QLabel(translator.t("artist_name"), self._header)
@@ -226,7 +222,7 @@ class ArtistBanner(QWidget):
         hl.addWidget(self._name_label, 1)
 
         del_btn = QPushButton("×", self._header)
-        del_btn.setFixedSize(16, 16)
+        del_btn.setFixedSize(_dp(16), _dp(16))
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setStyleSheet(_del_btn_style(p))
         del_btn.clicked.connect(lambda: self.delete_requested.emit(self))
@@ -242,8 +238,8 @@ class ArtistBanner(QWidget):
             f"border-top: none; border-radius: 0 0 4px 4px;"
         )
         bl = QVBoxLayout(self._body)
-        bl.setContentsMargins(8, 6, 8, 8)
-        bl.setSpacing(4)
+        bl.setContentsMargins(_dp(8), _dp(6), _dp(8), _dp(8))
+        bl.setSpacing(_dp(4))
 
         # Reference images — hero area, full width
         self._ref_grid = _RefImageGrid(storage, vertical=True, parent=self._body)
@@ -259,7 +255,7 @@ class ArtistBanner(QWidget):
 
         # LoRA / trigger — compact with copy button
         string_row = QHBoxLayout()
-        string_row.setSpacing(4)
+        string_row.setSpacing(_dp(4))
         self._string_edit = QLineEdit(self._body)
         self._string_edit.setPlaceholderText(translator.t("artist_string"))
         self._string_edit.setStyleSheet(_input_style(p))
@@ -267,7 +263,7 @@ class ArtistBanner(QWidget):
         string_row.addWidget(self._string_edit, 1)
         copy_btn = QPushButton("Copy", self._body)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setFixedHeight(22)
+        copy_btn.setFixedHeight(_dp(22))
         copy_btn.setStyleSheet(
             f"background: {p['accent']}; color: {p['accent_text']}; border: none; "
             f"border-radius: 3px; padding: 0 10px; font-size: {_fs('fs_9')}; letter-spacing: 1px;"
@@ -342,11 +338,11 @@ class _OutfitRow(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(_dp(3))
 
         # Top row: toggle + name + delete
         top = QHBoxLayout()
-        top.setSpacing(6)
+        top.setSpacing(_dp(6))
         self._toggle = ToggleSwitch(self)
         self._toggle.setChecked(outfit.active)
         self._toggle.toggled.connect(lambda: self.changed.emit())
@@ -356,12 +352,12 @@ class _OutfitRow(QWidget):
         self._name_edit.setPlaceholderText("outfit name")
         self._name_edit.setText(outfit.name)
         self._name_edit.setStyleSheet(_input_style(p, padding='2px 6px'))
-        self._name_edit.setFixedHeight(22)
+        self._name_edit.setFixedHeight(_dp(22))
         self._name_edit.textChanged.connect(lambda: self.changed.emit())
         top.addWidget(self._name_edit, 1)
 
         del_btn = QPushButton("×", self)
-        del_btn.setFixedSize(16, 16)
+        del_btn.setFixedSize(_dp(16), _dp(16))
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setStyleSheet(_del_btn_style(p, 'fs_10'))
         del_btn.clicked.connect(lambda: self.delete_requested.emit(self))
@@ -373,7 +369,7 @@ class _OutfitRow(QWidget):
         self._tags_edit.setPlaceholderText("school_uniform, pleated_skirt, ...")
         self._tags_edit.setText(outfit.tags)
         self._tags_edit.setStyleSheet(_input_style(p, padding='2px 6px'))
-        self._tags_edit.setFixedHeight(22)
+        self._tags_edit.setFixedHeight(_dp(22))
         self._tags_edit.textChanged.connect(lambda: self.changed.emit())
         layout.addWidget(self._tags_edit)
 
@@ -415,12 +411,12 @@ class OCBanner(QWidget):
             f"background: {p['bg_surface']}; border: 1px solid {p['line']}; border-radius: 4px;"
         )
         hl = QHBoxLayout(self._header)
-        hl.setContentsMargins(10, 6, 6, 6)
-        hl.setSpacing(8)
+        hl.setContentsMargins(_dp(10), _dp(6), _dp(6), _dp(6))
+        hl.setSpacing(_dp(8))
 
         self._arrow = QLabel("▸", self._header)
         self._arrow.setStyleSheet(_arrow_style(p))
-        self._arrow.setFixedWidth(10)
+        self._arrow.setFixedWidth(_dp(10))
         hl.addWidget(self._arrow)
 
         self._name_label = QLabel(translator.t("character_name"), self._header)
@@ -433,7 +429,7 @@ class OCBanner(QWidget):
         hl.addWidget(self._enabled)
 
         del_btn = QPushButton("×", self._header)
-        del_btn.setFixedSize(16, 16)
+        del_btn.setFixedSize(_dp(16), _dp(16))
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setStyleSheet(_del_btn_style(p))
         del_btn.clicked.connect(lambda: self.delete_requested.emit(self))
@@ -449,32 +445,32 @@ class OCBanner(QWidget):
             f"border-top: none; border-radius: 0 0 4px 4px;"
         )
         bl = QVBoxLayout(self._body)
-        bl.setContentsMargins(12, 8, 12, 8)
-        bl.setSpacing(6)
+        bl.setContentsMargins(_dp(12), _dp(8), _dp(12), _dp(8))
+        bl.setSpacing(_dp(6))
 
         # Order + Depth row
         spin_style = _input_style(p, padding='2px 4px')
         dim_style = _dim_label_style(p)
         od_row = QHBoxLayout()
-        od_row.setSpacing(6)
+        od_row.setSpacing(_dp(6))
         od_order_lbl = QLabel("Order", self._body)
         od_order_lbl.setStyleSheet(dim_style)
         od_row.addWidget(od_order_lbl)
         self._order_spin = QSpinBox(self._body)
         self._order_spin.setRange(0, 9999)
         self._order_spin.setValue(100)
-        self._order_spin.setFixedWidth(54)
+        self._order_spin.setFixedWidth(_dp(54))
         self._order_spin.setStyleSheet(spin_style)
         self._order_spin.valueChanged.connect(lambda: self.changed.emit())
         od_row.addWidget(self._order_spin)
-        od_row.addSpacing(8)
+        od_row.addSpacing(_dp(8))
         od_depth_lbl = QLabel("Depth", self._body)
         od_depth_lbl.setStyleSheet(dim_style)
         od_row.addWidget(od_depth_lbl)
         self._depth_spin = QSpinBox(self._body)
         self._depth_spin.setRange(0, 999)
         self._depth_spin.setValue(4)
-        self._depth_spin.setFixedWidth(54)
+        self._depth_spin.setFixedWidth(_dp(54))
         self._depth_spin.setStyleSheet(spin_style)
         self._depth_spin.valueChanged.connect(lambda: self.changed.emit())
         od_row.addWidget(self._depth_spin)
@@ -495,7 +491,7 @@ class OCBanner(QWidget):
         self._tags_edit = QTextEdit(self._body)
         self._tags_edit.setStyleSheet(_input_style(p, 'fs_11', '4px 8px'))
         self._tags_edit.setPlaceholderText("1girl, blue_hair, ...")
-        self._tags_edit.setMaximumHeight(56)
+        self._tags_edit.setMaximumHeight(_dp(56))
         self._tags_edit.textChanged.connect(lambda: self.changed.emit())
         bl.addWidget(self._tags_edit)
 
@@ -515,7 +511,7 @@ class OCBanner(QWidget):
         outfit_header.addWidget(outfit_lbl)
         outfit_header.addStretch()
         add_outfit_btn = QPushButton("+", self._body)
-        add_outfit_btn.setFixedSize(20, 20)
+        add_outfit_btn.setFixedSize(_dp(20), _dp(20))
         add_outfit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_outfit_btn.setStyleSheet(
             f"background: transparent; color: {p['text_dim']}; border: 1px solid {p['line']}; "
@@ -526,7 +522,7 @@ class OCBanner(QWidget):
         bl.addLayout(outfit_header)
 
         self._outfit_list = QVBoxLayout()
-        self._outfit_list.setSpacing(4)
+        self._outfit_list.setSpacing(_dp(4))
         bl.addLayout(self._outfit_list)
         self._outfit_rows: list[_OutfitRow] = []
 
@@ -612,17 +608,13 @@ class OCBanner(QWidget):
 # ═══════════════════════════════════════════════════════════
 
 class LibraryPanel(QWidget):
-    """Two-step scroll drawer.
+    """Right sidebar for artist and OC libraries."""
 
-    Step 1: Tab button opens a narrow strip (~60px) with section titles.
-    Step 2: Click a title → content expands downward with fade animation.
-    """
-
-    STRIP_WIDTH = 60
-    EXPANDED_WIDTH = 300
+    SIDEBAR_WIDTH = 320
 
     changed = pyqtSignal()
     width_changed = pyqtSignal(int)
+    section_changed = pyqtSignal(str)
 
     def __init__(self, translator: Translator, storage: AppStorage, parent=None):
         super().__init__(parent)
@@ -631,160 +623,109 @@ class LibraryPanel(QWidget):
         self._storage = storage
         self._artist_banners: list[ArtistBanner] = []
         self._oc_banners: list[OCBanner] = []
-        self._expanded_section: str | None = None
+        self._current_section = SECTION_ARTIST
         self._default_oc_order = 77
         self._default_oc_depth = 4
 
-        root = QHBoxLayout(self)
+        root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Strip (narrow vertical bar with section titles) ──
-        self._strip = QWidget(self)
-        strip_layout = QVBoxLayout(self._strip)
-        strip_layout.setContentsMargins(6, 16, 6, 16)
-        strip_layout.setSpacing(8)
+        self._header = QWidget(self)
+        header_layout = QVBoxLayout(self._header)
+        header_layout.setContentsMargins(_dp(10), _dp(10), _dp(10), _dp(8))
+        header_layout.setSpacing(_dp(8))
+        self._title = QLabel(self._header)
+        header_layout.addWidget(self._title)
 
-        self._artist_title_btn = QPushButton(translator.t("artist_library"), self._strip)
+        tab_row = QHBoxLayout()
+        tab_row.setContentsMargins(0, 0, 0, 0)
+        tab_row.setSpacing(_dp(6))
+
+        self._artist_title_btn = QPushButton(self._header)
         self._artist_title_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._artist_title_btn.clicked.connect(lambda: self._toggle_section(SECTION_ARTIST))
-        strip_layout.addWidget(self._artist_title_btn)
+        self._artist_title_btn.clicked.connect(lambda: self.set_current_section(SECTION_ARTIST))
+        tab_row.addWidget(self._artist_title_btn)
 
-        self._oc_title_btn = QPushButton(translator.t("oc_library"), self._strip)
+        self._oc_title_btn = QPushButton(self._header)
         self._oc_title_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._oc_title_btn.clicked.connect(lambda: self._toggle_section(SECTION_OC))
-        strip_layout.addWidget(self._oc_title_btn)
+        self._oc_title_btn.clicked.connect(lambda: self.set_current_section(SECTION_OC))
+        tab_row.addWidget(self._oc_title_btn)
+        header_layout.addLayout(tab_row)
+        root.addWidget(self._header)
 
-        strip_layout.addStretch()
-        self._strip.setFixedWidth(self.STRIP_WIDTH)
-        root.addWidget(self._strip)
-
-        # ── Content area (shown when a section is selected) ──
-        self._content = QWidget(self)
-        self._content.hide()
-        cl = QVBoxLayout(self._content)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(0)
-
-        scroll = QScrollArea(self._content)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(scroll.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("background: transparent; border: none;")
+        self._scroll = QScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(self._scroll.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet("background: transparent; border: none;")
 
         self._scroll_inner = QWidget()
         self._sections_layout = QVBoxLayout(self._scroll_inner)
-        self._sections_layout.setContentsMargins(8, 12, 8, 12)
-        self._sections_layout.setSpacing(6)
+        self._sections_layout.setContentsMargins(_dp(10), 0, _dp(10), _dp(12))
+        self._sections_layout.setSpacing(0)
 
-        # Artist content
         self._artist_body = QWidget(self._scroll_inner)
         al = QVBoxLayout(self._artist_body)
         al.setContentsMargins(0, 0, 0, 0)
-        al.setSpacing(6)
-        self._artist_list = QVBoxLayout()
-        self._artist_list.setSpacing(6)
-        al.addLayout(self._artist_list)
-        self._add_artist_btn = QPushButton("+ " + translator.t("add_artist"), self._artist_body)
+        al.setSpacing(_dp(6))
+        self._add_artist_btn = QPushButton(self._artist_body)
         self._add_artist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._add_artist_btn.clicked.connect(self._add_artist)
         al.addWidget(self._add_artist_btn)
+        self._artist_list = QVBoxLayout()
+        self._artist_list.setSpacing(_dp(6))
+        al.addLayout(self._artist_list)
         al.addStretch()
-        self._sections_layout.addWidget(self._artist_body)
-        self._artist_body.hide()
 
-        # OC content
         self._oc_body = QWidget(self._scroll_inner)
         ol = QVBoxLayout(self._oc_body)
         ol.setContentsMargins(0, 0, 0, 0)
-        ol.setSpacing(6)
-        self._oc_list = QVBoxLayout()
-        self._oc_list.setSpacing(6)
-        ol.addLayout(self._oc_list)
-        self._add_oc_btn = QPushButton("+ " + translator.t("add_oc"), self._oc_body)
+        ol.setSpacing(_dp(6))
+        self._add_oc_btn = QPushButton(self._oc_body)
         self._add_oc_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._add_oc_btn.clicked.connect(self._add_oc)
         ol.addWidget(self._add_oc_btn)
+        self._oc_list = QVBoxLayout()
+        self._oc_list.setSpacing(_dp(6))
+        ol.addLayout(self._oc_list)
         ol.addStretch()
+
+        self._sections_layout.addWidget(self._artist_body)
         self._sections_layout.addWidget(self._oc_body)
-        self._oc_body.hide()
+        self._scroll.setWidget(self._scroll_inner)
+        root.addWidget(self._scroll, 1)
 
-        self._sections_layout.addStretch()
-        scroll.setWidget(self._scroll_inner)
-        cl.addWidget(scroll)
-        root.addWidget(self._content, 1)
-
-        self.setMinimumWidth(self.STRIP_WIDTH)
-        self.setMaximumWidth(self.STRIP_WIDTH)
+        self.setFixedWidth(self.SIDEBAR_WIDTH)
+        self.retranslate_ui()
+        self.set_current_section(SECTION_ARTIST)
         self.apply_theme()
 
-    # ── Section toggle ──
+    def current_section(self) -> str:
+        return self._current_section
 
-    def _toggle_section(self, section: str):
-        if self._expanded_section == section:
-            # Collapse — animate width shrink + content fade out
-            self._expanded_section = None
-            self._apply_strip_styles()
-            self._animate_width(self.EXPANDED_WIDTH, self.STRIP_WIDTH, on_finish=self._after_collapse)
-        else:
-            # Switch or expand
-            was_expanded = self._expanded_section is not None
-            self._artist_body.setVisible(section == SECTION_ARTIST)
-            self._oc_body.setVisible(section == SECTION_OC)
-            self._content.show()
-            self._expanded_section = section
-            self._apply_strip_styles()
-            if not was_expanded:
-                # Fresh expand — animate width + fade
-                self._animate_width(self.STRIP_WIDTH, self.EXPANDED_WIDTH)
-                self._fade_content(True)
-            else:
-                # Switch section — just cross-fade content
-                self._fade_content(True)
-
-    def _after_collapse(self):
-        self._artist_body.hide()
-        self._oc_body.hide()
-        self._content.hide()
+    def set_current_section(self, section: str):
+        self._current_section = SECTION_OC if section == SECTION_OC else SECTION_ARTIST
+        self._artist_body.setVisible(self._current_section == SECTION_ARTIST)
+        self._oc_body.setVisible(self._current_section == SECTION_OC)
+        self._apply_strip_styles()
+        self.section_changed.emit(self._current_section)
         self.width_changed.emit(self.width())
 
-    def _animate_width(self, start: int, end: int, on_finish=None):
-        # Use fixedWidth via timer steps for smooth resize without dual-property jank
-        self._anim_target = end
-        anim = QPropertyAnimation(self, b"maximumWidth", self)
-        anim.setDuration(200)
-        anim.setStartValue(start)
-        anim.setEndValue(end)
-        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.setMinimumWidth(min(start, end))
-        def _on_done():
-            self.setMinimumWidth(end)
-            self.setMaximumWidth(end)
-            self.width_changed.emit(end)
-            if on_finish:
-                on_finish()
-        anim.finished.connect(_on_done)
-        anim.valueChanged.connect(lambda: self.width_changed.emit(self.width()))
-        anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
-
-    def _fade_content(self, show: bool):
-        effect = self._content.graphicsEffect()
-        if not effect:
-            effect = QGraphicsOpacityEffect(self._content)
-            self._content.setGraphicsEffect(effect)
-        anim = QPropertyAnimation(effect, b"opacity", self)
-        anim.setDuration(180)
-        anim.setStartValue(0.0 if show else 1.0)
-        anim.setEndValue(1.0 if show else 0.0)
-        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
-
-    # ── Theming ──
+    def retranslate_ui(self) -> None:
+        self._title.setText(self._t.t("library_panel"))
+        self._artist_title_btn.setText(self._t.t("artist_library"))
+        self._oc_title_btn.setText(self._t.t("oc_library"))
+        self._add_artist_btn.setText("+ " + self._t.t("add_artist"))
+        self._add_oc_btn.setText("+ " + self._t.t("add_oc"))
 
     def apply_theme(self):
         p = _p()
         self.setStyleSheet(
             f"#LibPanel {{ background: {p['bg']}; border-left: 1px solid {p['line_strong']}; }}"
+        )
+        self._title.setStyleSheet(
+            f"color: {p['text']}; font-size: {_fs('fs_11')}; font-weight: bold;"
         )
         self._apply_strip_styles()
         self._apply_add_btn_styles()
@@ -796,32 +737,28 @@ class LibraryPanel(QWidget):
     def _apply_strip_styles(self):
         p = _p()
         active = (
-            f"background: {p['accent']}; color: {p['accent_text']}; "
-            f"border: 1px solid {p['accent']}; border-radius: 4px; "
-            f"padding: 8px 4px; font-size: {_fs('fs_10')}; font-weight: bold; letter-spacing: 2px;"
+            f"background: {p['accent']}; color: {p['accent_text']}; border: 1px solid {p['accent']}; "
+            f"border-radius: 4px; padding: 6px 8px; font-size: {_fs('fs_10')}; font-weight: bold;"
         )
         normal = (
-            f"background: transparent; color: {p['text_dim']}; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 8px 4px; font-size: {_fs('fs_10')}; letter-spacing: 2px;"
+            f"background: {p['bg_surface']}; color: {p['text_dim']}; border: 1px solid {p['line']}; "
+            f"border-radius: 4px; padding: 6px 8px; font-size: {_fs('fs_10')};"
         )
-        hover_extra = f" QPushButton:hover {{ border-color: {p['accent']}; color: {p['text']}; }}"
         self._artist_title_btn.setStyleSheet(
-            active if self._expanded_section == SECTION_ARTIST else normal + hover_extra)
+            active if self._current_section == SECTION_ARTIST else normal
+        )
         self._oc_title_btn.setStyleSheet(
-            active if self._expanded_section == SECTION_OC else normal + hover_extra)
+            active if self._current_section == SECTION_OC else normal
+        )
 
     def _apply_add_btn_styles(self):
         p = _p()
         style = (
-            f"background: transparent; color: {p['text_dim']}; "
-            f"border: 1px solid {p['line']}; border-radius: 3px; "
-            f"padding: 5px 8px; font-size: {_fs('fs_10')}; letter-spacing: 1px;"
+            f"background: {p['bg_surface']}; color: {p['text']}; border: 1px solid {p['line']}; "
+            f"border-radius: 4px; padding: 6px 8px; font-size: {_fs('fs_10')};"
         )
-        for btn in (self._add_artist_btn, self._add_oc_btn):
-            btn.setStyleSheet(style)
-
-    # ── Entry management ──
+        self._add_artist_btn.setStyleSheet(style)
+        self._add_oc_btn.setStyleSheet(style)
 
     def _add_artist(self, entry: ArtistEntry | None = None):
         banner = ArtistBanner(self._t, self._storage, entry, self._scroll_inner)
@@ -864,6 +801,14 @@ class LibraryPanel(QWidget):
             self.changed.emit()
 
     def set_entries(self, artists: list[ArtistEntry], ocs: list[OCEntry]):
+        for banner in list(self._artist_banners):
+            self._artist_list.removeWidget(banner)
+            banner.deleteLater()
+        for banner in list(self._oc_banners):
+            self._oc_list.removeWidget(banner)
+            banner.deleteLater()
+        self._artist_banners.clear()
+        self._oc_banners.clear()
         for a in artists:
             self._add_artist(a)
         for o in ocs:

@@ -12,12 +12,15 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
+from ..models import SEND_MODE_CTRL_ENTER, SEND_MODE_ENTER
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
-# Shortcut data: (category_key, [(keys, description_key), ...])
-_SHORTCUT_DATA = [
+def _shortcut_data(send_mode: str) -> list[tuple[str, list[tuple[str, str]]]]:
+    send_label = "Enter" if send_mode == SEND_MODE_ENTER else "Ctrl+Enter"
+    return [
     ("shortcut_global", [
-        ("Ctrl+Enter", "sc_send"),
+        (send_label, "sc_send"),
         ("Ctrl+Shift+S", "sc_summary"),
         ("Esc", "sc_escape"),
         ("F1  /  Ctrl+/", "sc_shortcuts"),
@@ -54,11 +57,11 @@ _SHORTCUT_DATA = [
 class ShortcutsPanel(QWidget):
     """Popup panel showing all keyboard shortcuts and mouse gestures."""
 
-    def __init__(self, translator: Translator, parent=None):
+    def __init__(self, translator: Translator, send_mode: str = SEND_MODE_ENTER, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setFixedWidth(400)
+        self.setFixedWidth(_dp(400))
 
         p = current_palette()
         t = translator.t
@@ -71,8 +74,8 @@ class ShortcutsPanel(QWidget):
         surface.setObjectName("ShortcutSurface")
 
         main_layout = QVBoxLayout(surface)
-        main_layout.setContentsMargins(16, 12, 16, 12)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(_dp(16), _dp(12), _dp(16), _dp(12))
+        main_layout.setSpacing(_dp(8))
 
         # Header
         header = QLabel(t("shortcuts"), surface)
@@ -91,10 +94,12 @@ class ShortcutsPanel(QWidget):
 
         content = QWidget()
         cl = QVBoxLayout(content)
-        cl.setContentsMargins(0, 4, 0, 4)
-        cl.setSpacing(12)
+        cl.setContentsMargins(0, _dp(4), 0, _dp(4))
+        cl.setSpacing(_dp(12))
 
-        for cat_key, shortcuts in _SHORTCUT_DATA:
+        shortcut_data = _shortcut_data(send_mode)
+
+        for cat_key, shortcuts in shortcut_data:
             # Category header
             cat_label = QLabel(t(cat_key), content)
             cat_label.setStyleSheet(
@@ -106,11 +111,11 @@ class ShortcutsPanel(QWidget):
             for keys, desc_key in shortcuts:
                 row = QHBoxLayout()
                 row.setContentsMargins(0, 0, 0, 0)
-                row.setSpacing(12)
+                row.setSpacing(_dp(12))
 
                 # Key badge
                 key_label = QLabel(keys, content)
-                key_label.setFixedWidth(140)
+                key_label.setFixedWidth(_dp(140))
                 key_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 key_label.setStyleSheet(
                     f"background: {p['bg_content']}; color: {p['text']}; "
@@ -137,8 +142,8 @@ class ShortcutsPanel(QWidget):
         root.addWidget(surface)
 
         # Auto-size height
-        section_count = sum(len(s) for _, s in _SHORTCUT_DATA) + len(_SHORTCUT_DATA)
-        self.setFixedHeight(min(max(300, section_count * 28 + 80), 550))
+        section_count = sum(len(s) for _, s in shortcut_data) + len(shortcut_data)
+        self.setFixedHeight(min(max(_dp(300), section_count * _dp(28) + _dp(80)), _dp(550)))
 
     def show_at(self, global_pos: QPoint) -> None:
         screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()

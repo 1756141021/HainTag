@@ -29,6 +29,7 @@ from ..ui_tokens import (
     DOCK_FLOAT_RESIZE_HINT,
     DOCK_FLOAT_WIDTH,
     CLS_DOCK_ITEM_BUTTON,
+    _dp,
 )
 
 
@@ -128,8 +129,8 @@ class DockPanel(QFrame):
         self._float_rect_origin = QRect()
 
         self.root_layout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self)
-        self.root_layout.setContentsMargins(6, 8, 6, 8)
-        self.root_layout.setSpacing(6)
+        self.root_layout.setContentsMargins(_dp(6), _dp(8), _dp(6), _dp(8))
+        self.root_layout.setSpacing(_dp(6))
 
         self.toggle_button = QPushButton('‹', self)
         self.toggle_button.setObjectName('DockToggle')
@@ -139,7 +140,7 @@ class DockPanel(QFrame):
         self.items_container = QWidget(self)
         self.items_layout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self.items_container)
         self.items_layout.setContentsMargins(0, 0, 0, 0)
-        self.items_layout.setSpacing(4)
+        self.items_layout.setSpacing(_dp(4))
         self.root_layout.addWidget(self.items_container, 1)
 
         self.edge_handle = QFrame(self)

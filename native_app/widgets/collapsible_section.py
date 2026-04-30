@@ -36,7 +36,7 @@ class CollapsibleSection(QWidget):
         # Header row
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(4)
+        header.setSpacing(_dp(4))
 
         self._toggle_btn = QPushButton(self)
         self._toggle_btn.setFixedSize(_dp(20), _dp(20))

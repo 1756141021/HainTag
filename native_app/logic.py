@@ -37,6 +37,51 @@ def _format_example(entry: ExampleEntry, index: int) -> str:
     return f"例图{index}：\n画面描述：{entry.description.strip()}\n```\n{entry.tags.strip()}\n```"
 
 
+def _entry_block(entry, example_index: int) -> tuple[list[dict[str, str]], int]:
+    if isinstance(entry, PromptEntry):
+        return ([{"role": entry.role, "content": entry.content}], example_index)
+    if isinstance(entry, OCEntry):
+        desc = f"Character: {entry.character_name}" if entry.character_name else "Character reference"
+        return (
+            [
+                {"role": "user", "content": desc},
+                {"role": "assistant", "content": entry.merged_tags()},
+            ],
+            example_index,
+        )
+    example_index += 1
+    return ([{"role": "assistant", "content": _format_example(entry, example_index)}], example_index)
+
+
+def _history_turns(history: list[dict[str, str]] | None) -> list[list[dict[str, str]]]:
+    turns: list[list[dict[str, str]]] = []
+    current: list[dict[str, str]] = []
+    for item in history or []:
+        role = str(item.get("role", "")).strip()
+        content = str(item.get("content", "")).strip()
+        if role not in {"system", "user", "assistant"} or not content:
+            continue
+        message = {"role": role, "content": content}
+        if role == "user":
+            if current:
+                turns.append(current)
+            current = [message]
+            continue
+        current.append(message)
+        if role == "assistant":
+            turns.append(current)
+            current = []
+    if current:
+        turns.append(current)
+    return turns
+
+
+def _turn_insert_index(turns: list[list[dict[str, str]]], depth: int) -> int:
+    if not turns:
+        return 0
+    return max(0, len(turns) - max(1, depth))
+
+
 def build_messages(
     prompts: list[PromptEntry],
     examples: list[ExampleEntry],
@@ -58,52 +103,26 @@ def build_messages(
     depth_zero = [item for item in entries if getattr(item, "depth", 0) == 0]
     depth_nonzero = [item for item in entries if getattr(item, "depth", 0) > 0]
 
-    # Track example index for formatting
     example_counter = 0
-    messages: list[dict[str, str]] = []
+    prefix_blocks: list[list[dict[str, str]]] = []
 
     for entry in depth_zero:
-        if isinstance(entry, PromptEntry):
-            messages.append({"role": entry.role, "content": entry.content})
-        elif isinstance(entry, OCEntry):
-            desc = f"Character: {entry.character_name}" if entry.character_name else "Character reference"
-            messages.append({"role": "user", "content": desc})
-            messages.append({"role": "assistant", "content": entry.merged_tags()})
-        else:
-            example_counter += 1
-            messages.append({"role": "assistant", "content": _format_example(entry, example_counter)})
+        block, example_counter = _entry_block(entry, example_counter)
+        prefix_blocks.append(block)
 
-    if memory_mode and history:
-        for item in history:
-            role = str(item.get("role", "")).strip()
-            content = str(item.get("content", "")).strip()
-            if role in {"system", "user", "assistant"} and content:
-                messages.append({"role": role, "content": content})
+    turns = _history_turns(history if memory_mode else None)
 
     if active_input:
-        messages.append({"role": "user", "content": active_input})
+        turns.append([{"role": "user", "content": active_input}])
 
-    # Insert depth>0 entries: group by depth, keep Order within each group,
-    # then splice each group into the message list at once.
-    from collections import defaultdict
-    by_depth: dict[int, list[dict[str, str]]] = defaultdict(list)
-    for entry in depth_nonzero:  # already sorted by Order ascending
-        d = getattr(entry, "depth", 0)
-        if isinstance(entry, PromptEntry):
-            by_depth[d].append({"role": entry.role, "content": entry.content})
-        elif isinstance(entry, OCEntry):
-            desc = f"Character: {entry.character_name}" if entry.character_name else "Character reference"
-            by_depth[d].append({"role": "user", "content": desc})
-            by_depth[d].append({"role": "assistant", "content": entry.merged_tags()})
-        else:
-            example_counter += 1
-            by_depth[d].append({"role": "assistant", "content": _format_example(entry, example_counter)})
-    # Insert largest depth first (farthest from user input) so positions stay stable
-    for depth in sorted(by_depth, reverse=True):
-        group = by_depth[depth]
-        insert_at = max(0, len(messages) - depth)
-        messages[insert_at:insert_at] = group  # splice the whole group at once
+    for entry in depth_nonzero:
+        depth = getattr(entry, "depth", 0)
+        block, example_counter = _entry_block(entry, example_counter)
+        turns.insert(_turn_insert_index(turns, depth), block)
 
+    messages = [message for block in prefix_blocks for message in block]
+    for turn in turns:
+        messages.extend(turn)
     return messages
 
 

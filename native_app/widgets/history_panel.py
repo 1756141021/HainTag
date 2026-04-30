@@ -17,6 +17,7 @@ from ..i18n import Translator
 from ..models import HistoryEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 class _HistoryItem(QWidget):
@@ -36,12 +37,12 @@ class _HistoryItem(QWidget):
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(_dp(8), _dp(6), _dp(8), _dp(6))
         layout.setSpacing(2)
 
         # Top row: timestamp + model
         top = QHBoxLayout()
-        top.setSpacing(8)
+        top.setSpacing(_dp(8))
         self._ts_label = QLabel(entry.timestamp[:16].replace("T", "  "), self)
         self._ts_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; border: none;")
         top.addWidget(self._ts_label)
@@ -74,7 +75,7 @@ class _HistoryItem(QWidget):
         self._out_label.setWordWrap(True)
         layout.addWidget(self._out_label)
 
-        self.setFixedHeight(68)
+        self.setFixedHeight(_dp(68))
 
     def apply_theme(self):
         p = current_palette()
@@ -134,12 +135,12 @@ class HistoryPanel(QWidget):
 
         p = current_palette()
         root = QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(4)
+        root.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        root.setSpacing(_dp(4))
 
         # Header
         header = QHBoxLayout()
-        header.setSpacing(6)
+        header.setSpacing(_dp(6))
         self._title = QLabel(translator.t("history_panel"), self)
         self._title.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_11')}; font-weight: bold; letter-spacing: 1px;"
@@ -148,7 +149,7 @@ class HistoryPanel(QWidget):
         header.addWidget(title)
         header.addStretch()
         self._clear_btn = QPushButton("×", self)
-        self._clear_btn.setFixedSize(20, 20)
+        self._clear_btn.setFixedSize(_dp(20), _dp(20))
         self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._clear_btn.setToolTip(translator.t("history_clear"))
         self._clear_btn.setStyleSheet(

@@ -11,23 +11,28 @@ from PyQt6.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt6.QtGui import QCursor, QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSlider,
     QStackedWidget,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QWidgetItem,
 )
 
 from ..i18n import Translator
-from ..theme import _fs, current_palette
+from ..theme import _fs, current_palette, is_theme_light
 from ..ui_tokens import _dp
 
 
@@ -81,36 +86,23 @@ class _LocalTaggerTab(QWidget):
         p = current_palette()
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(24, 32, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(_dp(24), _dp(32), _dp(24), _dp(24))
+        layout.setSpacing(_dp(16))
 
-        title = QLabel("本地 TAG 反推", page)
+        title = QLabel(self._t.t("interr_setup_title"), page)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_14')}; font-weight: bold;")
         layout.addWidget(title)
 
-        desc = QLabel(
-            "使用 cl_tagger 模型离线识别图片的 Danbooru 标签。\n"
-            "首次使用需要下载模型文件（约 1.4GB）。",
-            page,
-        )
+        desc = QLabel(self._t.t("interr_setup_desc"), page)
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc.setWordWrap(True)
         desc.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')};")
         layout.addWidget(desc)
 
-        layout.addSpacing(8)
+        layout.addSpacing(_dp(8))
 
-        steps = QLabel(
-            "步骤：\n\n"
-            "1. 前往 HuggingFace 下载以下两个文件：\n"
-            "    • model_optimized.onnx（~1.4GB）\n"
-            "    • tag_mapping.json（~4MB）\n\n"
-            "2. 放在同一个文件夹中\n\n"
-            "3. 点击下方「选择模型文件夹」\n\n"
-            "如果已在 ComfyUI 等工具中下载过，直接选择那个目录即可。",
-            page,
-        )
+        steps = QLabel(self._t.t("interr_setup_steps"), page)
         steps.setWordWrap(True)
         steps.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_10')}; "
@@ -119,10 +111,10 @@ class _LocalTaggerTab(QWidget):
         )
         layout.addWidget(steps)
 
-        layout.addSpacing(8)
+        layout.addSpacing(_dp(8))
 
         # Buttons
-        link_btn = QPushButton("打开下载页面", page)
+        link_btn = QPushButton(self._t.t("interr_open_download"), page)
         link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         link_btn.setStyleSheet(
             f"background: transparent; color: {p['accent_text']}; "
@@ -134,7 +126,7 @@ class _LocalTaggerTab(QWidget):
         ))
         layout.addWidget(link_btn)
 
-        select_btn = QPushButton("选择模型文件夹", page)
+        select_btn = QPushButton(self._t.t("interr_select_model_dir"), page)
         select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         select_btn.setStyleSheet(
             f"background: {p['accent']}; color: {p['accent_text']}; "
@@ -145,7 +137,7 @@ class _LocalTaggerTab(QWidget):
         layout.addWidget(select_btn)
 
         # Auto-setup button (always available)
-        self._auto_setup_btn = QPushButton("自动配置 Python 环境 (~200MB)", page)
+        self._auto_setup_btn = QPushButton(self._t.t("interr_auto_setup"), page)
         self._auto_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._auto_setup_btn.setStyleSheet(
             f"background: {p['accent']}; color: {p['accent_text']}; "
@@ -156,7 +148,7 @@ class _LocalTaggerTab(QWidget):
         layout.addWidget(self._auto_setup_btn)
 
         # Manual Python path button (always available)
-        manual_btn = QPushButton("手动选择 Python 路径", page)
+        manual_btn = QPushButton(self._t.t("interr_manual_python"), page)
         manual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         manual_btn.setStyleSheet(
             f"background: transparent; color: {p['text_dim']}; "
@@ -180,7 +172,7 @@ class _LocalTaggerTab(QWidget):
         layout.addWidget(self._setup_status)
 
         # "Start" button — only visible when both model + python are ready
-        self._start_ready_btn = QPushButton("开始使用", page)
+        self._start_ready_btn = QPushButton(self._t.t("interr_start_using"), page)
         self._start_ready_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._start_ready_btn.setStyleSheet(
             f"background: {p['accent']}; color: {p['accent_text']}; "
@@ -208,8 +200,8 @@ class _LocalTaggerTab(QWidget):
         header = QWidget(page)
         header.setStyleSheet(f"background: {p['bg_surface']}; border-bottom: 1px solid {p['line']};")
         h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(10, 8, 10, 8)
-        h_layout.setSpacing(10)
+        h_layout.setContentsMargins(_dp(10), _dp(8), _dp(10), _dp(8))
+        h_layout.setSpacing(_dp(10))
 
         # Compact drop zone
         self._drop_zone = _DropZone(self._t, header)
@@ -219,12 +211,12 @@ class _LocalTaggerTab(QWidget):
 
         # Right side: category toggles + model path
         right_col = QVBoxLayout()
-        right_col.setSpacing(6)
+        right_col.setSpacing(_dp(6))
 
         # Category toggles (always visible, primary control)
         from ..tagger import CATEGORY_NAMES
         cat_row = QHBoxLayout()
-        cat_row.setSpacing(3)
+        cat_row.setSpacing(_dp(3))
         self._cat_buttons: dict[str, QPushButton] = {}
         for cat in CATEGORY_NAMES:
             btn = QPushButton(cat, header)
@@ -241,12 +233,10 @@ class _LocalTaggerTab(QWidget):
 
         # Threshold inline (compact, no collapsible)
         thresh_row = QHBoxLayout()
-        thresh_row.setSpacing(4)
-        gl = QLabel("通用", header)
+        thresh_row.setSpacing(_dp(4))
+        gl = QLabel(self._t.t("interr_general"), header)
         gl.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
-        gl.setToolTip("通用标签 (general) 的最低置信度阈值\n"
-                       "例如：1girl, red_hair, smile 等描述画面的标签\n"
-                       "值越低显示越多标签，值越高只保留高置信度标签")
+        gl.setToolTip(self._t.t("interr_general_tip"))
         thresh_row.addWidget(gl)
         self._gen_slider = QSlider(Qt.Orientation.Horizontal, header)
         self._gen_slider.setRange(5, 95)
@@ -258,12 +248,10 @@ class _LocalTaggerTab(QWidget):
         self._gen_value.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; font-family: monospace;")
         self._gen_slider.valueChanged.connect(lambda v: self._gen_value.setText(f"{v/100:.2f}"))
         thresh_row.addWidget(self._gen_value)
-        thresh_row.addSpacing(6)
-        cl = QLabel("角色", header)
+        thresh_row.addSpacing(_dp(6))
+        cl = QLabel(self._t.t("interr_character_label"), header)
         cl.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
-        cl.setToolTip("角色标签 (character/copyright/artist) 的最低置信度阈值\n"
-                       "例如：hatsune_miku, vocaloid 等角色/作品名\n"
-                       "通常需要较高阈值避免误判")
+        cl.setToolTip(self._t.t("interr_character_tip"))
         thresh_row.addWidget(cl)
         self._char_slider = QSlider(Qt.Orientation.Horizontal, header)
         self._char_slider.setRange(5, 95)
@@ -279,14 +267,14 @@ class _LocalTaggerTab(QWidget):
 
         # Model path
         path_row = QHBoxLayout()
-        path_row.setSpacing(4)
+        path_row.setSpacing(_dp(4))
         self._path_display = QLabel("", header)
         self._path_display.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
         path_row.addWidget(self._path_display, 1)
         browse_btn = QPushButton("📂", header)
         browse_btn.setFixedSize(_dp(16), _dp(16))
         browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        browse_btn.setToolTip("切换模型目录")
+        browse_btn.setToolTip(self._t.t("interr_browse_dir_tip"))
         browse_btn.setStyleSheet(f"border: none; background: transparent; font-size: {_fs('fs_9')};")
         browse_btn.clicked.connect(self._browse_model_dir)
         path_row.addWidget(browse_btn)
@@ -298,17 +286,17 @@ class _LocalTaggerTab(QWidget):
         # ── Body ──
         body = QWidget(page)
         b_layout = QVBoxLayout(body)
-        b_layout.setContentsMargins(10, 6, 10, 8)
-        b_layout.setSpacing(4)
+        b_layout.setContentsMargins(_dp(10), _dp(6), _dp(10), _dp(8))
+        b_layout.setSpacing(_dp(4))
 
         # Status bar
         status_row = QHBoxLayout()
-        status_row.setSpacing(6)
+        status_row.setSpacing(_dp(6))
         self._status = QLabel("", body)
         self._status.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
         status_row.addWidget(self._status, 1)
         self._show_conf = True
-        self._conf_btn = QPushButton("隐藏置信度", body)
+        self._conf_btn = QPushButton(self._t.t("interr_hide_conf"), body)
         self._conf_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._conf_btn.setFixedHeight(_dp(18))
         self._conf_btn.setStyleSheet(
@@ -332,7 +320,7 @@ class _LocalTaggerTab(QWidget):
 
         # Bottom buttons
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row.setSpacing(_dp(8))
         btn_row.addStretch()
         copy_btn = QPushButton(self._t.t("copy"), body)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -360,7 +348,7 @@ class _LocalTaggerTab(QWidget):
     # ───────────────── Install ─────────────────
 
     def _install_deps(self, btn: QPushButton):
-        btn.setText("安装中...")
+        btn.setText(self._t.t("interr_installing"))
         btn.setEnabled(False)
         self._setup_status.setText("")
         import subprocess, sys
@@ -379,10 +367,10 @@ class _LocalTaggerTab(QWidget):
 
         def _on_done(ok, err):
             if ok:
-                btn.setText("✓ 安装完成")
+                btn.setText(self._t.t("interr_install_done"))
                 btn.setEnabled(False)
-                self._setup_status.setText("依赖已安装，点击下方按钮重启应用")
-                restart_btn = QPushButton("重启应用", self)
+                self._setup_status.setText(self._t.t("interr_deps_installed"))
+                restart_btn = QPushButton(self._t.t("interr_restart"), self)
                 restart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 p = current_palette()
                 restart_btn.setStyleSheet(
@@ -395,9 +383,9 @@ class _LocalTaggerTab(QWidget):
                 idx = self._setup_page.layout().indexOf(self._setup_status)
                 self._setup_page.layout().insertWidget(idx + 1, restart_btn)
             else:
-                btn.setText("安装依赖 (onnxruntime + numpy)")
+                btn.setText(self._t.t("interr_install_deps"))
                 btn.setEnabled(True)
-                self._setup_status.setText(f"安装失败: {err}")
+                self._setup_status.setText(self._t.t("interr_install_failed").format(error=err))
 
         self._install_worker = _InstallWorker(self)
         self._install_worker.finished.connect(_on_done)
@@ -411,7 +399,7 @@ class _LocalTaggerTab(QWidget):
 
     def _browse_python(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择 Python 可执行文件", "",
+            self, self._t.t("interr_select_python"), "",
             "Python (python.exe python3.exe);;All (*)"
         )
         if not path:
@@ -434,7 +422,7 @@ class _LocalTaggerTab(QWidget):
         from ..python_env import PythonEnvSetupWorker
         if hasattr(self, '_auto_setup_btn'):
             self._auto_setup_btn.setEnabled(False)
-            self._auto_setup_btn.setText("配置中...")
+            self._auto_setup_btn.setText(self._t.t("interr_configuring"))
         self._setup_progress.show()
         self._setup_progress.setValue(0)
         self._setup_status.setText("")
@@ -463,15 +451,15 @@ class _LocalTaggerTab(QWidget):
                 external_python=python_path,
             )
         if hasattr(self, '_auto_setup_btn'):
-            self._auto_setup_btn.setText("✓ 已配置")
+            self._auto_setup_btn.setText(self._t.t("interr_configured"))
         self._update_setup_status()
 
     def _on_env_setup_error(self, error: str):
         self._setup_progress.hide()
-        self._setup_status.setText(f"配置失败: {error}")
+        self._setup_status.setText(self._t.t("interr_config_failed").format(error=error))
         if hasattr(self, '_auto_setup_btn'):
             self._auto_setup_btn.setEnabled(True)
-            self._auto_setup_btn.setText("自动配置 Python 环境 (~200MB)")
+            self._auto_setup_btn.setText(self._t.t("interr_auto_setup"))
 
     def _restart_app(self):
         """Restart the application."""
@@ -566,7 +554,7 @@ class _LocalTaggerTab(QWidget):
     def _switch_to_ready(self, model_dir: str):
         self._stack.setCurrentIndex(1)
         self._path_display.setText(model_dir)
-        self._status.setText("✓ 模型已加载")
+        self._status.setText(self._t.t("interr_model_loaded"))
 
     def _confirm_and_switch(self):
         """User clicked 'Start' — switch to ready page if everything is set."""
@@ -589,16 +577,16 @@ class _LocalTaggerTab(QWidget):
         """Update setup page status text based on current state. Never auto-switches."""
         parts = []
         if self._engine and self._engine._model_path:
-            parts.append("✓ 模型已加载")
+            parts.append(self._t.t("interr_model_loaded"))
         else:
-            parts.append("⬜ 请选择模型文件夹")
+            parts.append(self._t.t("interr_please_select_dir"))
 
         if self._engine and not self._engine._use_subprocess:
-            parts.append("✓ onnxruntime 可用")
+            parts.append(self._t.t("interr_onnx_available"))
         elif self._external_python:
-            parts.append(f"✓ Python 已配置")
+            parts.append(self._t.t("interr_python_configured"))
         else:
-            parts.append("⬜ 请配置 Python 环境")
+            parts.append(self._t.t("interr_please_config_python"))
 
         self._setup_status.setText("\n".join(parts))
 
@@ -607,7 +595,7 @@ class _LocalTaggerTab(QWidget):
             self._start_ready_btn.setVisible(self._can_infer())
 
     def _browse_model_dir(self):
-        path = QFileDialog.getExistingDirectory(self, "选择模型目录")
+        path = QFileDialog.getExistingDirectory(self, self._t.t("interr_select_model_dir_dialog"))
         if not path:
             return
         self._custom_model_dir = path
@@ -622,9 +610,9 @@ class _LocalTaggerTab(QWidget):
                 self.model_dir_changed.emit(path)
                 self._update_setup_status()
             except Exception as e:
-                self._setup_status.setText(f"加载失败: {e}")
+                self._setup_status.setText(self._t.t("interr_load_failed").format(error=e))
         else:
-            self._setup_status.setText("目录中未找到 .onnx + tag_mapping.json")
+            self._setup_status.setText(self._t.t("interr_no_model_found"))
 
     # ───────────────── Inference ─────────────────
 
@@ -658,7 +646,7 @@ class _LocalTaggerTab(QWidget):
         if not self._image_path or not self._engine or not self._engine.is_ready:
             return
         from ..tagger import TaggerWorker
-        self._status.setText("推理中...")
+        self._status.setText(self._t.t("interr_inferring"))
         self._result_edit.clear()
         self._worker = TaggerWorker(
             self._engine, self._image_path,
@@ -671,12 +659,11 @@ class _LocalTaggerTab(QWidget):
         self._worker.start()
 
     def _on_inference_error(self, error: str):
-        self._status.setText("推理失败")
+        self._status.setText(self._t.t("interr_infer_failed"))
         self._result_edit.setPlainText(error)
-        # Show a back-to-setup button so user can reconfigure
         if not hasattr(self, '_back_to_setup_btn') or not self._back_to_setup_btn.isVisible():
             p = current_palette()
-            self._back_to_setup_btn = QPushButton("返回设置", self._result_edit.parent())
+            self._back_to_setup_btn = QPushButton(self._t.t("interr_back_to_setup"), self._result_edit.parent())
             self._back_to_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._back_to_setup_btn.setStyleSheet(
                 f"background: transparent; color: {p['accent_text']}; "
@@ -722,14 +709,14 @@ class _LocalTaggerTab(QWidget):
         self._show_conf = not self._show_conf
         p = current_palette()
         if self._show_conf:
-            self._conf_btn.setText("隐藏置信度")
+            self._conf_btn.setText(self._t.t("interr_hide_conf"))
             self._conf_btn.setStyleSheet(
                 f"background: transparent; color: {p['text_dim']}; "
                 f"border: 1px solid {p['line']}; border-radius: 3px; "
                 f"padding: 0 6px; font-size: {_fs('fs_9')};"
             )
         else:
-            self._conf_btn.setText("显示置信度")
+            self._conf_btn.setText(self._t.t("interr_show_conf"))
             self._conf_btn.setStyleSheet(
                 f"background: transparent; color: {p['text_dim']}; "
                 f"border: 1px solid {p['line']}; border-radius: 3px; "
@@ -747,176 +734,634 @@ class _LocalTaggerTab(QWidget):
 
 
 # ═══════════════════════════════════════════════════
+#  Flow Layout (for tag display)
+# ═══════════════════════════════════════════════════
+
+from PyQt6.QtCore import QRect, QSize
+
+
+class _FlowLayout(QLayout):
+    """Simple flow layout that wraps widgets like text words."""
+
+    def __init__(self, parent=None, spacing: int = 4):
+        super().__init__(parent)
+        self._items: list[QWidgetItem] = []
+        self._spacing = spacing
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        m = self.contentsMargins()
+        size += QSize(m.left() + m.right(), m.top() + m.bottom())
+        return size
+
+    def _do_layout(self, rect, test_only: bool) -> int:
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+        sp = self._spacing
+
+        for item in self._items:
+            w = item.sizeHint().width()
+            h = item.sizeHint().height()
+            if x + w > rect.right() and line_height > 0:
+                x = rect.x()
+                y += line_height + sp
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(x, y, w, h))
+            x += w + sp
+            line_height = max(line_height, h)
+
+        return y + line_height - rect.y()
+
+
+# ═══════════════════════════════════════════════════
 #  LLM Vision Tab
 # ═══════════════════════════════════════════════════
 
 class _LLMTaggerTab(QWidget):
-    """Tab for LLM multimodal image tagging."""
+    """Tab for LLM multimodal image tagging with batch, presets, and tag validation."""
 
     send_to_input = pyqtSignal(str)
+    settings_changed = pyqtSignal()
 
     def __init__(self, translator: Translator, parent=None):
         super().__init__(parent)
         self._t = translator
-        self._image_path: str | None = None
+        self._tag_dict = None
+        self._image_paths: list[str] = []
+        self._results: list = []
+        self._current_index: int = 0
         self._worker = None
+        self._raw_buffer: str = ""
+        self._presets: list[dict] = []
+        self._populating: bool = False
 
-        p = current_palette()
-        root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
-
-        # ── Drop zone ──
-        self._drop_zone = _DropZone(translator, self)
-        self._drop_zone.image_selected.connect(self._on_image_selected)
-        root.addWidget(self._drop_zone)
-
-        # ── Prompt ──
-        prompt_label = QLabel(translator.t("interrogator_llm_prompt"), self)
-        prompt_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
-        root.addWidget(prompt_label)
-
-        self._prompt_edit = QTextEdit(self)
-        self._prompt_edit.setMaximumHeight(60)
-        self._prompt_edit.setPlainText(translator.t("interrogator_llm_default_prompt"))
-        self._prompt_edit.setStyleSheet(
-            f"background: {p['bg_input']}; color: {p['text']}; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 4px; font-size: {_fs('fs_10')};"
-        )
-        root.addWidget(self._prompt_edit)
-
-        # ── Start button ──
-        self._start_btn = QPushButton(translator.t("interrogator_start"), self)
-        self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._start_btn.clicked.connect(self._start_inference)
-        root.addWidget(self._start_btn)
-
-        # ── Status ──
-        self._status = QLabel("", self)
-        self._status.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
-        root.addWidget(self._status)
-
-        # ── Result ──
-        self._result_edit = QTextEdit(self)
-        self._result_edit.setReadOnly(True)
-        self._result_edit.setStyleSheet(
-            f"background: {p['bg_input']}; color: {p['text']}; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px; font-size: {_fs('fs_10')};"
-        )
-        root.addWidget(self._result_edit, 1)
-
-        # ── Buttons ──
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        copy_btn = QPushButton(translator.t("copy"), self)
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.clicked.connect(
-            lambda: QApplication.clipboard().setText(self._result_edit.toPlainText())
-        )
-        btn_row.addWidget(copy_btn)
-        send_btn = QPushButton(translator.t("interrogator_send_to_input"), self)
-        send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        send_btn.clicked.connect(
-            lambda: self.send_to_input.emit(self._result_edit.toPlainText()) if self._result_edit.toPlainText() else None
-        )
-        btn_row.addWidget(send_btn)
-        root.addLayout(btn_row)
-
-        # API settings reference (filled by window.py)
         self._api_base_url = ""
         self._api_key = ""
         self._model = ""
+
+        self._build_ui()
+
+    def _build_ui(self):
+        from .collapsible_section import CollapsibleSection
+        from .common import ToggleSwitch
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(_dp(10), _dp(10), _dp(10), _dp(10))
+        root.setSpacing(_dp(12))
+
+        # ── Drop zone ──
+        self._drop_zone = _DropZone(self._t, self, multi=True)
+        self._drop_zone.image_selected.connect(lambda path: self._on_images_selected([path]))
+        self._drop_zone.images_selected.connect(self._on_images_selected)
+        root.addWidget(self._drop_zone)
+
+        # ── Action strip (elevated bar) ──
+        self._action_strip = QWidget(self)
+        self._action_strip.setObjectName('LLMActionStrip')
+        strip_layout = QVBoxLayout(self._action_strip)
+        strip_layout.setContentsMargins(_dp(10), _dp(8), _dp(10), _dp(8))
+        strip_layout.setSpacing(_dp(6))
+
+        action_row = QHBoxLayout()
+        action_row.setSpacing(_dp(8))
+
+        self._preset_combo = QComboBox(self._action_strip)
+        self._preset_combo.setProperty('class', 'FieldCombo')
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_selected)
+        action_row.addWidget(self._preset_combo, 1)
+
+        self._start_btn = QPushButton(self._t.t("interrogator_start"), self._action_strip)
+        self._start_btn.setObjectName('PrimaryButton')
+        self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._start_btn.clicked.connect(self._start_batch)
+        action_row.addWidget(self._start_btn)
+
+        self._stop_btn = QPushButton(self._t.t("llm_tagger_stop"), self._action_strip)
+        self._stop_btn.setObjectName('SecondaryButton')
+        self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._stop_btn.clicked.connect(self._stop_batch)
+        self._stop_btn.hide()
+        action_row.addWidget(self._stop_btn)
+
+        strip_layout.addLayout(action_row)
+
+        self._status = QLabel("", self._action_strip)
+        strip_layout.addWidget(self._status)
+
+        root.addWidget(self._action_strip)
+
+        # ── Results panel (inset container) ──
+        self._results_panel = QWidget(self)
+        self._results_panel.setObjectName('LLMResultsPanel')
+        rp_layout = QVBoxLayout(self._results_panel)
+        rp_layout.setContentsMargins(_dp(1), _dp(1), _dp(1), _dp(1))
+        rp_layout.setSpacing(0)
+
+        self._scroll = QScrollArea(self._results_panel)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self._results_container = QWidget()
+        self._results_layout = QVBoxLayout(self._results_container)
+        self._results_layout.setContentsMargins(_dp(4), _dp(4), _dp(4), _dp(4))
+        self._results_layout.setSpacing(_dp(4))
+        self._results_layout.addStretch()
+        self._scroll.setWidget(self._results_container)
+        rp_layout.addWidget(self._scroll, 1)
+
+        self._btn_sep = QFrame(self._results_panel)
+        self._btn_sep.setFrameShape(QFrame.Shape.HLine)
+        self._btn_sep.setFixedHeight(1)
+        rp_layout.addWidget(self._btn_sep)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(_dp(8), _dp(6), _dp(8), _dp(6))
+        bottom_row.addStretch()
+        self._copy_all_btn = QPushButton(self._t.t("llm_tagger_copy_all"), self._results_panel)
+        self._copy_all_btn.setObjectName('SecondaryButton')
+        self._copy_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_all_btn.clicked.connect(self._copy_all)
+        bottom_row.addWidget(self._copy_all_btn)
+        self._send_all_btn = QPushButton(self._t.t("llm_tagger_send_all"), self._results_panel)
+        self._send_all_btn.setObjectName('SecondaryButton')
+        self._send_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._send_all_btn.clicked.connect(self._send_all)
+        bottom_row.addWidget(self._send_all_btn)
+        rp_layout.addLayout(bottom_row)
+
+        root.addWidget(self._results_panel, 1)
+
+        # ── Edit section (collapsed by default) ──
+        edit_content = QWidget(self)
+        edit_layout = QVBoxLayout(edit_content)
+        edit_layout.setContentsMargins(0, _dp(4), 0, 0)
+        edit_layout.setSpacing(_dp(6))
+
+        edit_row = QHBoxLayout()
+        edit_row.setSpacing(_dp(6))
+        self._name_edit = QLineEdit(self)
+        self._name_edit.setProperty('class', 'FieldInput')
+        self._name_edit.setPlaceholderText(self._t.t("llm_tagger_preset_name"))
+        self._name_edit.textChanged.connect(self._on_name_edited)
+        edit_row.addWidget(self._name_edit, 1)
+
+        self._add_preset_btn = QPushButton("+", self)
+        self._add_preset_btn.setObjectName('PrimaryIconButton')
+        self._add_preset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_preset_btn.clicked.connect(self._add_preset)
+        edit_row.addWidget(self._add_preset_btn)
+
+        self._del_preset_btn = QPushButton("×", self)
+        self._del_preset_btn.setObjectName('SecondaryIconButton')
+        self._del_preset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._del_preset_btn.clicked.connect(self._delete_preset)
+        edit_row.addWidget(self._del_preset_btn)
+
+        edit_layout.addLayout(edit_row)
+
+        self._prompt_edit = QTextEdit(self)
+        self._prompt_edit.setMaximumHeight(_dp(120))
+        self._prompt_edit.setProperty('class', 'FieldInput')
+        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_prompt"))
+        self._prompt_edit.textChanged.connect(self._on_text_edited)
+        edit_layout.addWidget(self._prompt_edit)
+
+        api_row = QHBoxLayout()
+        api_row.setSpacing(_dp(6))
+        self._api_toggle_label = QLabel(self._t.t("llm_tagger_use_separate_api"), self)
+        self._api_toggle_label.setProperty('class', 'FieldLabel')
+        api_row.addWidget(self._api_toggle_label)
+        api_row.addStretch()
+        self._api_toggle = ToggleSwitch(self)
+        self._api_toggle.toggled.connect(self._on_api_toggle)
+        api_row.addWidget(self._api_toggle)
+        edit_layout.addLayout(api_row)
+
+        self._api_fields_widget = QWidget(self)
+        api_fields = QVBoxLayout(self._api_fields_widget)
+        api_fields.setContentsMargins(0, 0, 0, 0)
+        api_fields.setSpacing(_dp(4))
+
+        self._separate_url = QLineEdit(self)
+        self._separate_url.setProperty('class', 'FieldInput')
+        self._separate_url.setPlaceholderText(self._t.t("llm_tagger_api_base_url"))
+        self._separate_url.textChanged.connect(self._on_api_field_changed)
+        api_fields.addWidget(self._separate_url)
+
+        self._separate_key = QLineEdit(self)
+        self._separate_key.setProperty('class', 'FieldInput')
+        self._separate_key.setPlaceholderText(self._t.t("llm_tagger_api_key"))
+        self._separate_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._separate_key.textChanged.connect(self._on_api_field_changed)
+        api_fields.addWidget(self._separate_key)
+
+        self._separate_model = QLineEdit(self)
+        self._separate_model.setProperty('class', 'FieldInput')
+        self._separate_model.setPlaceholderText(self._t.t("llm_tagger_api_model"))
+        self._separate_model.textChanged.connect(self._on_api_field_changed)
+        api_fields.addWidget(self._separate_model)
+
+        self._api_fields_widget.hide()
+        edit_layout.addWidget(self._api_fields_widget)
+
+        self._edit_section = CollapsibleSection(
+            self._t.t("llm_tagger_edit_section"), edit_content,
+            collapsed=True, parent=self,
+        )
+        root.addWidget(self._edit_section)
+
+    # ── Public API ──
 
     def set_api_settings(self, base_url: str, api_key: str, model: str):
         self._api_base_url = base_url
         self._api_key = api_key
         self._model = model
 
-    def _on_image_selected(self, path: str):
-        self._image_path = path
+    def set_tag_dictionary(self, dictionary):
+        self._tag_dict = dictionary
 
-    def _start_inference(self):
-        if not self._image_path:
+    def apply_llm_settings(self, settings):
+        self._populating = True
+        self._presets = [dict(p) for p in (settings.tagger_llm_presets or [])]
+        self._preset_combo.clear()
+        for p in self._presets:
+            self._preset_combo.addItem(p.get("name", ""))
+        idx = min(settings.tagger_llm_active_preset, len(self._presets) - 1) if self._presets else -1
+        self._preset_combo.setCurrentIndex(idx)
+        self._sync_fields_to_preset(idx)
+        self._api_toggle.setChecked(settings.tagger_llm_use_separate)
+        self._api_fields_widget.setVisible(settings.tagger_llm_use_separate)
+        if settings.tagger_llm_base_url:
+            self._separate_url.setText(settings.tagger_llm_base_url)
+        if settings.tagger_llm_api_key:
+            self._separate_key.setText(settings.tagger_llm_api_key)
+        if settings.tagger_llm_model:
+            self._separate_model.setText(settings.tagger_llm_model)
+        self._populating = False
+
+    def collect_llm_settings(self) -> dict:
+        return {
+            "tagger_llm_presets": [dict(p) for p in self._presets],
+            "tagger_llm_active_preset": max(0, self._preset_combo.currentIndex()),
+            "tagger_llm_use_separate": self._api_toggle.isChecked(),
+            "tagger_llm_base_url": self._separate_url.text(),
+            "tagger_llm_api_key": self._separate_key.text(),
+            "tagger_llm_model": self._separate_model.text(),
+        }
+
+    # ── Slots ──
+
+    def _on_images_selected(self, paths: list[str]):
+        self._image_paths = paths
+
+    def _on_preset_selected(self, index: int):
+        if self._populating:
+            return
+        self._populating = True
+        self._sync_fields_to_preset(index)
+        self._populating = False
+        self.settings_changed.emit()
+
+    def _sync_fields_to_preset(self, index: int):
+        if 0 <= index < len(self._presets):
+            self._name_edit.setText(self._presets[index].get("name", ""))
+            self._prompt_edit.setPlainText(self._presets[index].get("text", ""))
+            self._name_edit.setEnabled(True)
+            self._prompt_edit.setEnabled(True)
+        else:
+            self._name_edit.clear()
+            self._prompt_edit.clear()
+            self._name_edit.setEnabled(len(self._presets) == 0)
+            self._prompt_edit.setEnabled(True)
+
+    def _on_name_edited(self, text: str):
+        if self._populating:
+            return
+        idx = self._preset_combo.currentIndex()
+        if 0 <= idx < len(self._presets):
+            self._presets[idx]["name"] = text
+            self._preset_combo.setItemText(idx, text)
+            self.settings_changed.emit()
+
+    def _on_text_edited(self):
+        if self._populating:
+            return
+        idx = self._preset_combo.currentIndex()
+        if 0 <= idx < len(self._presets):
+            self._presets[idx]["text"] = self._prompt_edit.toPlainText()
+            self.settings_changed.emit()
+
+    def _add_preset(self):
+        name = self._t.t("llm_tagger_new_preset") + f" {len(self._presets) + 1}"
+        self._presets.append({"name": name, "text": ""})
+        self._populating = True
+        self._preset_combo.addItem(name)
+        self._preset_combo.setCurrentIndex(len(self._presets) - 1)
+        self._sync_fields_to_preset(len(self._presets) - 1)
+        self._populating = False
+        self._name_edit.setFocus()
+        self._name_edit.selectAll()
+        self.settings_changed.emit()
+
+    def _delete_preset(self):
+        idx = self._preset_combo.currentIndex()
+        if idx < 0 or idx >= len(self._presets):
+            return
+        self._populating = True
+        self._presets.pop(idx)
+        self._preset_combo.removeItem(idx)
+        new_idx = min(idx, len(self._presets) - 1) if self._presets else -1
+        self._preset_combo.setCurrentIndex(new_idx)
+        self._sync_fields_to_preset(new_idx)
+        self._populating = False
+        self.settings_changed.emit()
+
+    def _on_api_field_changed(self):
+        if self._populating:
+            return
+        self.settings_changed.emit()
+
+    def _on_api_toggle(self, checked: bool):
+        self._api_fields_widget.setVisible(checked)
+        if not self._populating:
+            self.settings_changed.emit()
+
+    def _get_effective_api(self) -> tuple[str, str, str]:
+        if self._api_toggle.isChecked() and self._separate_url.text().strip():
+            return (
+                self._separate_url.text().strip(),
+                self._separate_key.text().strip(),
+                self._separate_model.text().strip(),
+            )
+        return (self._api_base_url, self._api_key, self._model)
+
+    def _get_prompt_text(self) -> str:
+        idx = self._preset_combo.currentIndex()
+        if 0 <= idx < len(self._presets):
+            return self._presets[idx].get("text", "").strip()
+        return self._prompt_edit.toPlainText().strip()
+
+    # ── Batch processing ──
+
+    def _start_batch(self):
+        if not self._image_paths:
             self._status.setText(self._t.t("interrogator_no_image"))
             return
-        if not self._api_base_url or not self._api_key or not self._model:
-            self._status.setText(self._t.t("error_missing_api"))
+        base_url, api_key, model = self._get_effective_api()
+        if not base_url or not api_key or not model:
+            self._status.setText(self._t.t("llm_tagger_no_api"))
             return
 
-        self._status.setText("推理中...")
-        self._result_edit.clear()
+        self._results.clear()
+        self._current_index = 0
         self._start_btn.setEnabled(False)
+        self._stop_btn.show()
+        self._clear_result_widgets()
+        self._process_next()
 
-        # Build message with image
-        prompt_text = self._prompt_edit.toPlainText().strip()
-        with open(self._image_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
+    def _process_next(self):
+        if self._current_index >= len(self._image_paths):
+            self._on_batch_finished()
+            return
 
-        ext = Path(self._image_path).suffix.lower().lstrip(".")
-        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext, "image/png")
+        path = self._image_paths[self._current_index]
+        self._status.setText(
+            self._t.t("llm_tagger_batch_progress")
+            .replace("{current}", str(self._current_index + 1))
+            .replace("{total}", str(len(self._image_paths)))
+        )
+        self._raw_buffer = ""
 
-        messages = [
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                {"type": "text", "text": prompt_text},
-            ]}
-        ]
-
+        from ..llm_tagger_logic import build_vision_messages
         from ..api_client import ChatWorker
         from ..logic import normalize_api_base_url
-        base_url = normalize_api_base_url(self._api_base_url)
-        payload = {"model": self._model, "messages": messages, "max_tokens": 4096, "stream": True}
 
-        self._worker = ChatWorker(
-            f"{base_url}/chat/completions", payload, self._api_key, stream=True, summary_mode=False
-        )
+        base_url, api_key, model = self._get_effective_api()
+        messages = build_vision_messages(path, self._get_prompt_text())
+        url = f"{normalize_api_base_url(base_url)}/chat/completions"
+        payload = {"model": model, "messages": messages, "max_tokens": 4096, "stream": True}
+
+        self._worker = ChatWorker(url, payload, api_key, stream=True, summary_mode=False)
         self._worker.delta_received.connect(self._on_delta)
         self._worker.error_received.connect(self._on_error)
-        self._worker.finished_cleanly.connect(self._on_finished)
+        self._worker.finished_cleanly.connect(self._on_single_finished)
         self._worker.start()
 
     def _on_delta(self, text: str):
-        cursor = self._result_edit.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertText(text)
+        self._raw_buffer += text
+
+    def _on_single_finished(self):
+        from ..llm_tagger_logic import parse_llm_tags, validate_tags
+        from ..models import LLMTagResult
+
+        path = self._image_paths[self._current_index]
+        tags = parse_llm_tags(self._raw_buffer)
+        parsed = validate_tags(tags, self._tag_dict)
+
+        result = LLMTagResult(image_path=path, raw_text=self._raw_buffer, parsed_tags=parsed)
+        self._results.append(result)
+        self._add_result_widget(result)
+
+        self._current_index += 1
+        self._process_next()
 
     def _on_error(self, message: str, status_code: int, details: str):
-        self._status.setText(f"[Error] {message}")
-        self._start_btn.setEnabled(True)
+        from ..models import LLMTagResult
 
-    def _on_finished(self):
-        self._status.setText("✓ 推理完成")
+        path = self._image_paths[self._current_index]
+        result = LLMTagResult(image_path=path, raw_text=f"[Error] {message}")
+        self._results.append(result)
+        self._add_result_widget(result)
+
+        self._current_index += 1
+        self._process_next()
+
+    def _stop_batch(self):
+        if self._worker:
+            self._worker.cancel()
+        self._current_index = len(self._image_paths)
+        self._on_batch_finished()
+
+    def _on_batch_finished(self):
         self._start_btn.setEnabled(True)
+        self._stop_btn.hide()
+        total_valid = sum(1 for r in self._results for t in r.parsed_tags if t.is_valid)
+        self._status.setText(
+            self._t.t("llm_tagger_valid_tags").replace("{count}", str(total_valid))
+        )
+
+    # ── Result display ──
+
+    def _clear_result_widgets(self):
+        while self._results_layout.count() > 1:
+            item = self._results_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _add_result_widget(self, result):
+        from .collapsible_section import CollapsibleSection
+        from .tag_completer import _CATEGORY_COLORS
+
+        p = current_palette()
+        content = QWidget()
+        flow = _FlowLayout(content, spacing=_dp(4))
+
+        for ptag in result.parsed_tags:
+            label = QLabel(ptag.name.replace("_", " "))
+            label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            if ptag.is_valid:
+                dark_c, light_c = _CATEGORY_COLORS.get(ptag.category_id, ("#6699FF", "#0055CC"))
+                color = light_c if is_theme_light() else dark_c
+                label.setStyleSheet(
+                    f"color: {color}; background: transparent; "
+                    f"padding: 2px 6px; font-size: {_fs('fs_10')};"
+                )
+                if ptag.translation:
+                    label.setToolTip(ptag.translation)
+            else:
+                label.setStyleSheet(
+                    f"color: {p['text_dim']}; background: transparent; "
+                    f"padding: 2px 6px; font-size: {_fs('fs_10')}; "
+                    f"font-style: italic;"
+                )
+                label.setToolTip(self._t.t("llm_tagger_unknown_tag"))
+            flow.addWidget(label)
+
+        if result.raw_text.startswith("[Error]"):
+            err_label = QLabel(result.raw_text)
+            err_label.setStyleSheet(f"color: {p['accent_warn']}; font-size: {_fs('fs_9')};")
+            err_label.setWordWrap(True)
+            flow.addWidget(err_label)
+
+        title = os.path.basename(result.image_path)
+        section = CollapsibleSection(title, content, collapsed=False, parent=self._results_container)
+        insert_pos = self._results_layout.count() - 1
+        self._results_layout.insertWidget(insert_pos, section)
+
+    # ── Copy / Send ──
+
+    def _collect_all_tags(self) -> str:
+        seen: set[str] = set()
+        tags: list[str] = []
+        for r in self._results:
+            for t in r.parsed_tags:
+                if t.name not in seen:
+                    seen.add(t.name)
+                    tags.append(t.name)
+        return ", ".join(tags)
+
+    def _copy_all(self):
+        text = self._collect_all_tags()
+        if text:
+            QApplication.clipboard().setText(text)
+
+    def _send_all(self):
+        text = self._collect_all_tags()
+        if text:
+            self.send_to_input.emit(text)
+
+    # ── Theme / i18n ──
+
+    def apply_theme(self):
+        p = current_palette()
+        # Action strip: elevated bar (scoped to avoid child inheritance)
+        self._action_strip.setStyleSheet(
+            f"QWidget#LLMActionStrip {{ background: {p['bg_surface']}; "
+            f"border: 1px solid {p['line']}; border-radius: 6px; }}"
+        )
+        self._status.setStyleSheet(
+            f"color: {p['text_muted']}; font-size: {_fs('fs_9')};"
+        )
+        # Results panel: inset container (scoped)
+        self._results_panel.setStyleSheet(
+            f"QWidget#LLMResultsPanel {{ background: {p['bg_input']}; "
+            f"border: 1px solid {p['line']}; border-radius: 6px; }}"
+        )
+        self._btn_sep.setStyleSheet(f"background: {p['line']}; border: none;")
+        # Drop zone
+        self._drop_zone.apply_theme()
+        # Edit section: de-emphasize
+        self._edit_section.apply_theme()
+        self._edit_section._toggle_btn.setStyleSheet(
+            f"color: {p['text_muted']}; border: none; font-size: {_fs('fs_10')};"
+        )
+        self._edit_section._title_label.setStyleSheet(
+            f"color: {p['text_muted']}; font-size: {_fs('fs_12')};"
+        )
+
+    def retranslate_ui(self):
+        self._edit_section.set_title(self._t.t("llm_tagger_edit_section"))
+        self._name_edit.setPlaceholderText(self._t.t("llm_tagger_preset_name"))
+        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_prompt"))
+        self._api_toggle_label.setText(self._t.t("llm_tagger_use_separate_api"))
+        self._separate_url.setPlaceholderText(self._t.t("llm_tagger_api_base_url"))
+        self._separate_key.setPlaceholderText(self._t.t("llm_tagger_api_key"))
+        self._separate_model.setPlaceholderText(self._t.t("llm_tagger_api_model"))
+        self._start_btn.setText(self._t.t("interrogator_start"))
+        self._stop_btn.setText(self._t.t("llm_tagger_stop"))
+        self._copy_all_btn.setText(self._t.t("llm_tagger_copy_all"))
+        self._send_all_btn.setText(self._t.t("llm_tagger_send_all"))
 
 
 # ═══════════════════════════════════════════════════
 #  Drop Zone (shared)
 # ═══════════════════════════════════════════════════
 
+_IMAGE_FILTER = "Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp);;All (*)"
+
+
 class _DropZone(QFrame):
-    """Image drop zone with preview."""
+    """Image drop zone with preview. Supports single or multi-image mode."""
 
     image_selected = pyqtSignal(str)
+    images_selected = pyqtSignal(list)
 
-    def __init__(self, translator: Translator, parent=None):
+    def __init__(self, translator: Translator, parent=None, *, multi: bool = False):
         super().__init__(parent)
         self._t = translator
+        self._multi = multi
         self.setAcceptDrops(True)
-        self.setMinimumHeight(60)
+        self.setMinimumHeight(_dp(48))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        p = current_palette()
-        self.setStyleSheet(
-            f"background: {p['bg_input']}; border: 2px dashed {p['line_strong']}; border-radius: 6px;"
-        )
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label = QLabel(translator.t("interrogator_drop_image"), self)
+
+        hint_key = "llm_tagger_drop_images" if multi else "interrogator_drop_image"
+        self._label = QLabel(translator.t(hint_key), self)
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')}; border: none;")
         layout.addWidget(self._label)
 
         self._preview = QLabel(self)
@@ -924,11 +1369,27 @@ class _DropZone(QFrame):
         self._preview.hide()
         layout.addWidget(self._preview)
 
+        self.apply_theme()
+
+    def apply_theme(self):
+        p = current_palette()
+        self.setStyleSheet(
+            f"background: {p['bg_input']}; border: 1px solid {p['line']}; border-radius: 6px;"
+        )
+        self._label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_10')}; border: none;")
+
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        if self._multi:
+            paths, _ = QFileDialog.getOpenFileNames(
+                self, self._t.t("interrogator_select_image"), "", _IMAGE_FILTER
+            )
+            if paths:
+                self._set_images(paths)
+        else:
             path, _ = QFileDialog.getOpenFileName(
-                self, self._t.t("interrogator_select_image"), "",
-                "Images (*.png *.jpg *.jpeg *.webp);;All (*)"
+                self, self._t.t("interrogator_select_image"), "", _IMAGE_FILTER
             )
             if path:
                 self._set_image(path)
@@ -939,7 +1400,13 @@ class _DropZone(QFrame):
 
     def dropEvent(self, event):
         urls = event.mimeData().urls()
-        if urls:
+        if not urls:
+            return
+        if self._multi:
+            paths = [u.toLocalFile() for u in urls if u.toLocalFile()]
+            if paths:
+                self._set_images(paths)
+        else:
             path = urls[0].toLocalFile()
             if path:
                 self._set_image(path)
@@ -948,13 +1415,29 @@ class _DropZone(QFrame):
         pixmap = QPixmap(path)
         if pixmap.isNull():
             return
-        # Scale to fit parent size
         max_h = max(40, self.height() - 30)
         scaled = pixmap.scaled(max_h, max_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self._preview.setPixmap(scaled)
         self._preview.show()
         self._label.setText(os.path.basename(path))
         self.image_selected.emit(path)
+
+    def _set_images(self, paths: list[str]):
+        valid: list[str] = []
+        for p in paths:
+            if not QPixmap(p).isNull():
+                valid.append(p)
+        if not valid:
+            return
+        if len(valid) == 1:
+            self._set_image(valid[0])
+            self.images_selected.emit(valid)
+            return
+        self._preview.hide()
+        self._label.setText(
+            self._t.t("llm_tagger_images_selected").replace("{count}", str(len(valid)))
+        )
+        self.images_selected.emit(valid)
 
 
 # ═══════════════════════════════════════════════════
@@ -997,17 +1480,20 @@ class InterrogatorWidget(QWidget):
     def set_api_settings(self, base_url: str, api_key: str, model: str):
         self._llm_tab.set_api_settings(base_url, api_key, model)
 
+    def set_tag_dictionary(self, dictionary):
+        self._llm_tab.set_tag_dictionary(dictionary)
+
+    def apply_llm_settings(self, settings):
+        self._llm_tab.apply_llm_settings(settings)
+
+    def collect_llm_settings(self) -> dict:
+        return self._llm_tab.collect_llm_settings()
+
     def apply_theme(self):
-        # Rebuild pages to pick up new palette + font sizes
         self._local_tab._rebuild_pages()
-        # LLM tab has fewer custom styles, but refresh result area
-        p = current_palette()
-        self._llm_tab._result_edit.setStyleSheet(
-            f"background: {p['bg_input']}; color: {p['text']}; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px; font-size: {_fs('fs_10')};"
-        )
+        self._llm_tab.apply_theme()
 
     def retranslate_ui(self):
         self._tabs.setTabText(0, self._t.t("interrogator_local"))
         self._tabs.setTabText(1, self._t.t("interrogator_llm"))
+        self._llm_tab.retranslate_ui()

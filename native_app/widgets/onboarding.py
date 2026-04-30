@@ -43,8 +43,8 @@ class OnboardingOverlay(QWidget):
         self._panel.setObjectName("OnboardingPanel")
 
         panel_layout = QVBoxLayout(self._panel)
-        panel_layout.setContentsMargins(20, 16, 20, 12)
-        panel_layout.setSpacing(8)
+        panel_layout.setContentsMargins(_dp(20), _dp(16), _dp(20), _dp(12))
+        panel_layout.setSpacing(_dp(8))
 
         self._title_label = QLabel(self._panel)
         self._title_label.setObjectName("OnboardingTitle")
@@ -57,7 +57,7 @@ class OnboardingOverlay(QWidget):
         panel_layout.addWidget(self._desc_label)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row.setSpacing(_dp(8))
 
         self._step_label = QLabel(self._panel)
         self._step_label.setObjectName("OnboardingStep")

@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 
 from ..i18n import Translator
 from ..theme import _fs, current_palette
+from ..ui_tokens import _dp
 
 
 class DestroyTemplateEditor(QDialog):
@@ -30,16 +31,16 @@ class DestroyTemplateEditor(QDialog):
 
         p = current_palette()
         self.setWindowTitle(translator.t("metadata_edit_preset"))
-        self.setMinimumSize(500, 400)
+        self.setMinimumSize(_dp(500), _dp(400))
         self.setStyleSheet(f"background: {p['bg']}; color: {p['text']};")
 
         root = QHBoxLayout(self)
-        root.setSpacing(12)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(_dp(12))
+        root.setContentsMargins(_dp(16), _dp(16), _dp(16), _dp(16))
 
         # ── Left: template list ──
         left = QVBoxLayout()
-        left.setSpacing(6)
+        left.setSpacing(_dp(6))
 
         left_header = QHBoxLayout()
         left_label = QLabel(translator.t("metadata_edit_preset"), self)
@@ -48,7 +49,7 @@ class DestroyTemplateEditor(QDialog):
         left_header.addStretch()
 
         add_btn = QPushButton("+", self)
-        add_btn.setFixedSize(24, 24)
+        add_btn.setFixedSize(_dp(24), _dp(24))
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setStyleSheet(
             f"background: {p['accent']}; color: {p['accent_text']}; "
@@ -82,7 +83,7 @@ class DestroyTemplateEditor(QDialog):
 
         # ── Right: edit fields ──
         right = QVBoxLayout()
-        right.setSpacing(8)
+        right.setSpacing(_dp(8))
 
         name_label = QLabel("名称", self)
         name_label.setStyleSheet(f"font-size: {_fs('fs_10')}; color: {p['text_dim']};")

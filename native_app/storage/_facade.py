@@ -121,14 +121,14 @@ class AppStorage:
 
     # ── History ──
 
-    def load_history(self) -> list:
-        return self._history.load_history()
+    def load_history(self, retention_days: int = 0) -> list:
+        return self._history.load_history(retention_days=retention_days)
 
-    def save_history(self, entries: list) -> None:
-        self._history.save_history(entries)
+    def save_history(self, entries: list, retention_days: int = 0) -> None:
+        self._history.save_history(entries, retention_days=retention_days)
 
-    def append_history(self, entry) -> None:
-        self._history.append_history(entry)
+    def append_history(self, entry, retention_days: int = 0) -> None:
+        self._history.append_history(entry, retention_days=retention_days)
 
     def clear_history(self) -> None:
         self._history.clear_history()

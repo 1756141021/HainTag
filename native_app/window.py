@@ -50,6 +50,7 @@ from .models import (
     DockPosition,
     DockState,
     ExampleEntry,
+    FloatingTrayMemberState,
     WidgetState,
     WindowState,
     DEFAULT_WINDOW_HEIGHT,
@@ -67,6 +68,8 @@ from .models import (
     CONFIG_SCOPE_SETTINGS_PAGE,
     CONFIG_SCOPE_TAG_MARKERS,
     CONFIG_SCOPE_WINDOW_LAYOUT,
+    SEND_MODE_CTRL_ENTER,
+    SEND_MODE_ENTER,
 )
 from .storage import AppStorage
 from .ui_tokens import (
@@ -84,6 +87,7 @@ from .ui_tokens import (
 )
 from .widgets.dock import DockPanel
 from .widgets.example_widget import ExampleWidget
+from .widgets.floating_tray import FloatingTrayWidget
 from .widgets.input_widget import InputWidget
 from .widgets.metadata_viewer import MetadataViewerWidget
 from .widgets.metadata_destroyer import MetadataDestroyerWidget
@@ -130,10 +134,10 @@ class SummaryDialog(QDialog):
     def __init__(self, title: str, content: str, copy_label: str, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(560, 360)
+        self.resize(_dp(560), _dp(360))
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(8)
+        root.setContentsMargins(_dp(16), _dp(16), _dp(16), _dp(16))
+        root.setSpacing(_dp(8))
 
         editor = QTextEdit(self)
         editor.setProperty('class', CLS_SUMMARY_TEXT)
@@ -162,6 +166,7 @@ class MainWindow(QWidget):
         self._normal_geometry = QRect()
         self._title_drag_offset = QPoint()
         self._preview_position = ''
+        self._right_sidebar_mode = ''
         self._next_example_index = 1
         self._example_cards: dict[str, tuple[WidgetCard, ExampleWidget]] = {}
         self._card_labels: dict[str, str] = {}
@@ -186,7 +191,7 @@ class MainWindow(QWidget):
         self.setObjectName('AppWindow')
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setMinimumSize(720, 480)
+        self.setMinimumSize(_dp(720), _dp(480))
         self.setWindowTitle(self._translator.t('app_title'))
         icon_path = Path(__file__).parent / 'resources' / 'icon.png'
         if icon_path.exists():
@@ -202,10 +207,11 @@ class MainWindow(QWidget):
         self.title_bar.setCursor(Qt.CursorShape.OpenHandCursor)
         self.title_bar.installEventFilter(self)
         title_layout = QHBoxLayout(self.title_bar)
-        title_layout.setContentsMargins(12, 6, 12, 6)
+        title_layout.setContentsMargins(_dp(12), _dp(6), _dp(12), _dp(6))
         title_layout.setSpacing(2)
         title_layout.addStretch(1)
 
+        self.btn_language = self._create_title_button('中', self._toggle_language_quick)
         self.btn_settings = self._create_title_button('⚙', self._toggle_settings)
         self.btn_gallery = self._create_title_button('🖼', self._open_image_manager)
         self.btn_help = self._create_title_button('?', self._show_shortcuts_panel)
@@ -213,7 +219,7 @@ class MainWindow(QWidget):
         self.btn_min = self._create_title_button('─', self.showMinimized)
         self.btn_max = self._create_title_button('□', self._toggle_maximize)
         self.btn_close = self._create_title_button('×', self.close, object_name='CloseButton')
-        for button in [self.btn_settings, self.btn_gallery, self.btn_help, self.btn_pin, self.btn_min, self.btn_max, self.btn_close]:
+        for button in [self.btn_language, self.btn_settings, self.btn_gallery, self.btn_help, self.btn_pin, self.btn_min, self.btn_max, self.btn_close]:
             title_layout.addWidget(button)
         self._set_button_active(self.btn_settings, False)
         self._set_button_active(self.btn_pin, False)
@@ -236,26 +242,26 @@ class MainWindow(QWidget):
         self._version_label.clicked.connect(self._show_changelog)
         self._version_label.setToolTip("Changelog")
 
-        # Library panel (two-step scroll drawer from right)
+        # Library sidebar
         from .widgets.library_panel import LibraryPanel
         self._library_panel = LibraryPanel(self._translator, self._storage, self.workspace)
         self._library_panel.hide()
         self._library_panel.changed.connect(self._on_library_changed)
         self._library_panel.width_changed.connect(lambda _: self._position_library())
-        self._library_open = False
+        self._library_panel.section_changed.connect(self._on_library_section_changed)
 
-        # Half-circle tab button on right edge (top-right area)
         self._lib_tab_btn = QPushButton("◂", self.workspace)
         self._lib_tab_btn.setObjectName("LibTabBtn")
         self._lib_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lib_tab_btn.setFixedSize(_dp(20), _dp(48))
+        self._lib_tab_btn.setFixedSize(_dp(18), _dp(64))
         self._lib_tab_btn.clicked.connect(self._toggle_library)
-        self._lib_tab_btn.setToolTip(self._translator.t("tip_library"))
+        self._lib_tab_btn.setToolTip(self._translator.t("artist_library"))
 
         # Load library data
         artists, ocs = self._storage.load_library()
         if artists or ocs:
             self._library_panel.set_entries(artists, ocs)
+        self._library_panel.set_current_section(self._state.settings.library_last_section)
 
         self.dock_preview = QWidget(self.content_host)
         self.dock_preview.setObjectName('DockPreview')
@@ -290,6 +296,7 @@ class MainWindow(QWidget):
         self.prompt_manager.preview_requested.connect(self._show_prompt_preview)
         self.prompt_card.set_content(self.prompt_manager)
         self.workspace.add_card(self.prompt_card)
+        self._register_card_hooks(self.prompt_card)
         self._label_card(self.prompt_card, 'widget_prompts')
 
         self.main_card = WidgetCard('widget-main', min_size=QSize(520, 400), parent=self.workspace)
@@ -306,8 +313,8 @@ class MainWindow(QWidget):
         self._main_splitter.addWidget(self.input_widget)
         self._main_splitter.setStretchFactor(0, 3)
         self._main_splitter.setStretchFactor(1, 1)
-        self.input_widget.setMinimumHeight(80)
-        self.output_widget.setMinimumHeight(120)
+        self.input_widget.setMinimumHeight(_dp(80))
+        self.output_widget.setMinimumHeight(_dp(120))
         self._main_input_on_top = False
         main_root.addWidget(self._main_splitter, 1)
         self.main_card.set_content(main_container)
@@ -322,6 +329,7 @@ class MainWindow(QWidget):
         self._main_splitter.splitterMoved.connect(self._reposition_swap_btn)
         main_container.resizeEvent = lambda e: self._reposition_swap_btn()
         self.workspace.add_card(self.main_card)
+        self._register_card_hooks(self.main_card)
         self._label_card(self.main_card, 'widget_main')
 
         # Metadata Viewer (single instance)
@@ -329,6 +337,7 @@ class MainWindow(QWidget):
         self.metadata_viewer_widget = MetadataViewerWidget(self._translator, self.metadata_viewer_card)
         self.metadata_viewer_card.set_content(self.metadata_viewer_widget)
         self.workspace.add_card(self.metadata_viewer_card)
+        self._register_card_hooks(self.metadata_viewer_card)
         self.metadata_viewer_card.hide()
         self._label_card(self.metadata_viewer_card, 'widget_metadata_viewer')
 
@@ -337,13 +346,14 @@ class MainWindow(QWidget):
         self.metadata_destroyer_widget = MetadataDestroyerWidget(self._translator, self.metadata_destroyer_card)
         self.metadata_destroyer_card.set_content(self.metadata_destroyer_widget)
         self.workspace.add_card(self.metadata_destroyer_card)
+        self._register_card_hooks(self.metadata_destroyer_card)
         self.metadata_destroyer_card.hide()
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
 
         # Destroy template combo in title bar
         self._destroy_combo = QComboBox(self.metadata_destroyer_card._drag_strip)
         self._destroy_combo.setFixedHeight(_dp(22))
-        self._destroy_combo.setMaximumWidth(100)
+        self._destroy_combo.setMaximumWidth(_dp(100))
         self._destroy_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self._destroy_combo.currentIndexChanged.connect(self._on_destroy_template_changed)
         self._destroy_combo.installEventFilter(self)
@@ -372,6 +382,7 @@ class MainWindow(QWidget):
         self.interrogator_widget.python_path_changed.connect(self._on_tagger_python_path_changed)
         self.interrogator_card.set_content(self.interrogator_widget)
         self.workspace.add_card(self.interrogator_card)
+        self._register_card_hooks(self.interrogator_card)
         self.interrogator_card.hide()
         self._label_card(self.interrogator_card, 'interrogator')
 
@@ -381,29 +392,26 @@ class MainWindow(QWidget):
         self._history_sidebar.hide()
         self._history_sidebar.entry_fill_requested.connect(self._on_history_fill)
         self._history_sidebar.width_changed.connect(lambda _: self._position_history_sidebar())
-        self._history_open = False
+        self._history_sidebar.set_retention_days(self._state.settings.history_retention_days)
 
-        # History toggle button — workspace child, positioned at main_card's right edge
         self._history_tab_btn = QPushButton("◁", self.workspace)
         self._history_tab_btn.setObjectName("HistTabBtn")
         self._history_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._history_tab_btn.setFixedSize(_dp(16), _dp(80))
+        self._history_tab_btn.setFixedSize(_dp(18), _dp(64))
         self._history_tab_btn.clicked.connect(self._toggle_history_sidebar)
         self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
 
-        # Follow main_card on every move/resize (fires during drag, not just on release)
+        # Follow main_card on every move/resize
         self.main_card.geometry_live.connect(self._position_history_btn)
         self.main_card.geometry_live.connect(self._position_history_sidebar)
+        self.main_card.geometry_live.connect(self._position_library)
 
-
-        # Load existing history
-        entries = self._storage.load_history()
+        entries = self._storage.load_history(retention_days=self._state.settings.history_retention_days)
         if entries:
             self._history_sidebar.set_entries(entries)
 
-        # Track main_card float/unfloat — reparent history button
-        self.main_card.floated.connect(lambda _: self._reparent_history_btn_to_card())
-        self.main_card.unfloated.connect(lambda _: self._reparent_history_btn_to_workspace())
+        self.main_card.floated.connect(lambda _: self._reparent_right_rail_to_card())
+        self.main_card.unfloated.connect(lambda _: self._reparent_right_rail_to_workspace())
 
         # Workspace drag-and-drop → open metadata viewer
         self.workspace.image_dropped.connect(self._on_workspace_image_dropped)
@@ -411,6 +419,8 @@ class MainWindow(QWidget):
         self._conversation_history: list[dict[str, str]] = []
         self._pending_history_input: str = ""
         self._pending_history_model: str = ""
+        self._floating_tray = FloatingTrayWidget(self._translator)
+        self._floating_tray.member_requested.connect(self._restore_from_floating_tray)
 
         self._tag_dictionary = TagDictionary()
         csv_name = 'danbooru_all_2.csv'
@@ -421,13 +431,24 @@ class MainWindow(QWidget):
                 self._tag_dictionary.load_csv(csv_path)
                 break
         self.output_widget.set_dictionary(self._tag_dictionary)
+        self.interrogator_widget.set_tag_dictionary(self._tag_dictionary)
+        self.interrogator_widget.apply_llm_settings(self._state.settings)
+        s_init = self.settings_panel.settings()
+        from .logic import normalize_api_base_url
+        self.interrogator_widget.set_api_settings(
+            normalize_api_base_url(s_init.api_base_url), s_init.api_key, s_init.model
+        )
+        self.interrogator_widget._llm_tab.settings_changed.connect(self._on_llm_tagger_settings_changed)
 
         # Install tag autocomplete on input editor and output editors
         install_completer(self.input_widget.editor, self._tag_dictionary)
         install_completer(self.output_widget.full_editor, self._tag_dictionary)
         install_completer(self.output_widget.nochar_editor, self._tag_dictionary)
+        self.input_widget.install_send_key_handler()
+        self.input_widget.set_send_mode(self._state.settings.send_mode)
 
         self.input_widget.send_button.clicked.connect(self._handle_send_action)
+        self.input_widget.send_requested.connect(self._handle_send_action)
         self.input_widget.summary_button.clicked.connect(self._handle_summary_action)
         self.input_widget.editor.textChanged.connect(self._on_editor_changed)
 
@@ -457,8 +478,6 @@ class MainWindow(QWidget):
         return button
 
     def _setup_shortcuts(self) -> None:
-        QShortcut(QKeySequence('Ctrl+Enter'), self, activated=self._handle_send_action)
-        QShortcut(QKeySequence('Ctrl+Return'), self, activated=self._handle_send_action)
         QShortcut(QKeySequence('Ctrl+Shift+S'), self, activated=self._handle_summary_action)
         QShortcut(QKeySequence('Esc'), self, activated=self._handle_escape)
         QShortcut(QKeySequence('F1'), self, activated=self._show_shortcuts_panel)
@@ -482,6 +501,9 @@ class MainWindow(QWidget):
 
     def _load_state_into_ui(self) -> None:
         self.settings_panel.apply_settings(self._state.settings)
+        self.input_widget.set_send_mode(self._state.settings.send_mode)
+        self._history_sidebar.set_retention_days(self._state.settings.history_retention_days)
+        self._library_panel.set_current_section(self._state.settings.library_last_section)
         self.prompt_manager.set_prompt_entries(self._state.prompts)
         self.input_widget.set_text(self._state.input_history)
         self.dock_panel.set_state(self._state.dock)
@@ -617,7 +639,8 @@ class MainWindow(QWidget):
             self.showMaximized()
             self._apply_native_window_style()
         QTimer.singleShot(100, self._reposition_swap_btn)
-        QTimer.singleShot(100, self._position_history_btn)
+        QTimer.singleShot(100, self._position_right_rail)
+        QTimer.singleShot(120, self._restore_floating_tray_state)
         if not self._has_persisted_state:
             QTimer.singleShot(800, self._start_onboarding)
         else:
@@ -713,6 +736,11 @@ class MainWindow(QWidget):
         label = self._translator.t(i18n_key)
         self._card_labels[card.widget_id] = label
         card.set_title(label)
+        if hasattr(self, "_floating_tray"):
+            self._floating_tray.set_labels(self._card_labels)
+
+    def _register_card_hooks(self, card: WidgetCard) -> None:
+        card.interaction_finished.connect(self._on_card_interaction_finished)
 
     def _create_example_card(
         self,
@@ -734,7 +762,14 @@ class MainWindow(QWidget):
         install_completer(editor.tags_edit, self._tag_dictionary)
         card.set_content(editor)
         self.workspace.add_card(card)
-        card.retranslate_ui(self._translator.t('grip_title'), self._translator.t('resize_title'), self._translator.t('tip_close_card'))
+        self._register_card_hooks(card)
+        card.retranslate_ui(
+            self._translator.t('grip_title'),
+            self._translator.t('resize_title'),
+            self._translator.t('tip_close_card'),
+            self._translator.t('pin_on'),
+            self._translator.t('pin_off'),
+        )
         if state is not None:
             card.setGeometry(state.x, state.y, state.width, state.height)
             if not state.visible or state.docked:
@@ -769,12 +804,107 @@ class MainWindow(QWidget):
                 self._update_token_estimate()
                 return
 
+    def _floating_card_snapshot(self, card: WidgetCard) -> FloatingTrayMemberState:
+        geometry = card.geometry()
+        return FloatingTrayMemberState(
+            widget_id=card.widget_id,
+            x=geometry.x(),
+            y=geometry.y(),
+            width=geometry.width(),
+            height=geometry.height(),
+        )
+
+    def _visible_floating_cards(self) -> list[WidgetCard]:
+        return [
+            card for card in self.workspace.all_cards()
+            if getattr(card, "_floating", False) and card.isVisible()
+        ]
+
+    def _cards_overlap_or_near(self, left: WidgetCard, right: WidgetCard, margin: int = 48) -> bool:
+        left_rect = left.frameGeometry()
+        right_rect = right.frameGeometry()
+        if left_rect.intersects(right_rect):
+            return True
+        return left_rect.adjusted(-margin, -margin, margin, margin).intersects(right_rect)
+
+    def _tray_anchor_point(self, cards: list[WidgetCard]) -> QPoint:
+        if not cards:
+            return QPoint(120, 120)
+        center_x = sum(card.frameGeometry().center().x() for card in cards) // len(cards)
+        center_y = sum(card.frameGeometry().center().y() for card in cards) // len(cards)
+        return QPoint(center_x, center_y)
+
+    def _store_card_in_tray(self, card: WidgetCard) -> None:
+        if self._floating_tray.has_member(card.widget_id):
+            self._floating_tray.update_member(self._floating_card_snapshot(card))
+        else:
+            self._floating_tray.add_member(self._floating_card_snapshot(card))
+        card.hide()
+
+    def _restore_from_floating_tray(self, widget_id: str) -> None:
+        member = self._floating_tray.remove_member(widget_id)
+        card = self.workspace.card(widget_id)
+        if member is None or card is None:
+            return
+        if not getattr(card, "_floating", False):
+            card.float_out(QPoint(member.x + member.width // 2, member.y + 16))
+        card.setGeometry(member.x, member.y, member.width, member.height)
+        card.show()
+        card.raise_()
+        if not self._floating_tray.member_ids():
+            self._floating_tray.hide()
+        self._schedule_save()
+
+    def _restore_floating_tray_state(self) -> None:
+        state = self._state.floating_tray
+        if not state.visible or not state.members:
+            return
+        for member in state.members:
+            card = self.workspace.card(member.widget_id)
+            if card is None:
+                continue
+            if not getattr(card, "_floating", False):
+                card.float_out(QPoint(member.x + member.width // 2, member.y + 16))
+            card.setGeometry(member.x, member.y, member.width, member.height)
+            self._store_card_in_tray(card)
+        self._floating_tray.set_labels(self._card_labels)
+        self._floating_tray.restore_state(state)
+
+    def _on_card_interaction_finished(self, widget_id: str) -> None:
+        card = self.workspace.card(widget_id)
+        if card is None or not getattr(card, "_floating", False) or not card.isVisible():
+            return
+
+        tray_rect = self._floating_tray.frameGeometry() if self._floating_tray.isVisible() else None
+        if tray_rect is not None and tray_rect.adjusted(-24, -24, 24, 24).intersects(card.frameGeometry()):
+            self._store_card_in_tray(card)
+            self._floating_tray.move(self._floating_tray.pos())
+            self._schedule_save()
+            return
+
+        nearby = [other for other in self._visible_floating_cards() if other is not card and self._cards_overlap_or_near(card, other)]
+        if not nearby:
+            return
+
+        members = [card, *nearby]
+        anchor = self._tray_anchor_point(members)
+        self._floating_tray.move(anchor)
+        self._floating_tray.set_labels(self._card_labels)
+        self._floating_tray.retranslate_ui()
+        for member in members:
+            self._store_card_in_tray(member)
+        self._floating_tray.show()
+        self._floating_tray.raise_()
+        self._schedule_save()
+
     def _dock_query(self) -> DockQueryResult | None:
         if not self.dock_panel.isVisible():
             return None
         return DockQueryResult(self.dock_panel.dock_capture_rect(), self.dock_panel.state().position)
 
     def _dock_card(self, widget_id: str) -> None:
+        if self._floating_tray.has_member(widget_id):
+            self._floating_tray.remove_member(widget_id)
         self.workspace.hide_card(widget_id)
         if widget_id == 'widget-main':
             self._on_main_card_visibility_changed()
@@ -782,6 +912,9 @@ class MainWindow(QWidget):
         self._schedule_save()
 
     def _restore_card(self, widget_id: str, global_pos: QPoint | None) -> None:
+        if self._floating_tray.has_member(widget_id):
+            self._restore_from_floating_tray(widget_id)
+            return
         card = self.workspace.card(widget_id)
         if card is None:
             return
@@ -831,8 +964,9 @@ class MainWindow(QWidget):
     def _refresh_dock_items(self) -> None:
         items: list[tuple[str, str, str]] = []
         icons = {'widget-prompts': 'P', 'widget-input': 'I'}
+        tray_members = set(self._floating_tray.member_ids())
         for card in self.workspace.all_cards():
-            if card.isVisible():
+            if card.isVisible() or card.widget_id in tray_members:
                 continue
             label = self._card_labels.get(card.widget_id, card.widget_id)
             icon = icons.get(card.widget_id, 'E' if card.widget_id.startswith('widget-example-') else 'W')
@@ -864,11 +998,20 @@ class MainWindow(QWidget):
         settings.bg_brightness = self._state.settings.bg_brightness
         settings.workspace_menu_order = self._state.settings.workspace_menu_order
         settings.image_manager_folder = self._state.settings.image_manager_folder
+        settings.send_mode = self._state.settings.send_mode
+        settings.history_retention_days = self._state.settings.history_retention_days
+        settings.library_last_section = self._state.settings.library_last_section
         settings.skipped_version = self._state.settings.skipped_version
         settings.destroy_templates = self._state.settings.destroy_templates
         settings.active_destroy_template = self._state.settings.active_destroy_template
         settings.tagger_model_dir = self._state.settings.tagger_model_dir
         settings.tagger_python_path = self._state.settings.tagger_python_path
+        settings.tagger_llm_use_separate = self._state.settings.tagger_llm_use_separate
+        settings.tagger_llm_base_url = self._state.settings.tagger_llm_base_url
+        settings.tagger_llm_api_key = self._state.settings.tagger_llm_api_key
+        settings.tagger_llm_model = self._state.settings.tagger_llm_model
+        settings.tagger_llm_presets = self._state.settings.tagger_llm_presets
+        settings.tagger_llm_active_preset = self._state.settings.tagger_llm_active_preset
         window_geometry = self._base_window_geometry()
         available = self._current_available_geometry()
         self._state.settings = settings
@@ -890,6 +1033,7 @@ class MainWindow(QWidget):
         self._state.examples = self._collect_examples()
         self._state.widgets = self._collect_widget_states()
         self._state.input_history = self.input_widget.text()
+        self._state.floating_tray = self._floating_tray.tray_state()
         return self._state
 
     def _persist_state(self) -> None:
@@ -938,6 +1082,8 @@ class MainWindow(QWidget):
             self.show()
         self._apply_native_window_style()
         self._set_button_active(self.btn_pin, pinned)
+        self.btn_pin.setText('📌' if pinned else '📍')
+        self.btn_pin.setToolTip(self._translator.t('pin_off') if pinned else self._translator.t('pin_on'))
 
     def _apply_full_profile_state(self, state: AppState) -> None:
         previous_startup = self._startup_complete
@@ -966,6 +1112,8 @@ class MainWindow(QWidget):
         self._apply_pinned_state(state.window.pinned)
         self._apply_shell_layout()
         self._restore_widget_layouts()
+        self._restore_floating_tray_state()
+        self._position_right_rail()
         if state.window.maximized:
             self.showMaximized()
             self._apply_native_window_style()
@@ -981,8 +1129,25 @@ class MainWindow(QWidget):
 
     def _on_settings_changed(self) -> None:
         s = self.settings_panel.settings()
+        self._state.settings.send_mode = s.send_mode if s.send_mode in {SEND_MODE_ENTER, SEND_MODE_CTRL_ENTER} else SEND_MODE_ENTER
+        self._state.settings.history_retention_days = s.history_retention_days
         self._library_panel.set_oc_defaults(s.default_oc_order, s.default_oc_depth)
+        self._history_sidebar.set_retention_days(s.history_retention_days)
+        self._history_sidebar.set_entries(self._storage.load_history(retention_days=s.history_retention_days))
+        self.input_widget.set_send_mode(self._state.settings.send_mode)
+        from .logic import normalize_api_base_url
+        self.interrogator_widget.set_api_settings(
+            normalize_api_base_url(s.api_base_url), s.api_key, s.model
+        )
         self._update_token_estimate()
+        self._schedule_save()
+
+    def _on_llm_tagger_settings_changed(self) -> None:
+        llm_settings = self.interrogator_widget.collect_llm_settings()
+        s = self._state.settings
+        for key, value in llm_settings.items():
+            if hasattr(s, key):
+                setattr(s, key, value)
         self._schedule_save()
 
     def _on_prompts_changed(self) -> None:
@@ -1255,8 +1420,8 @@ class MainWindow(QWidget):
         popup = self._create_popup(320)
         inner = popup._inner
         layout = QVBoxLayout(inner)
-        layout.setContentsMargins(16, 8, 16, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(_dp(16), _dp(8), _dp(16), _dp(12))
+        layout.setSpacing(_dp(8))
         layout.addWidget(QLabel(self._translator.t('drag_to_reorder'), inner))
         list_widget = QListWidget(inner)
         list_widget.setDragDropMode(QListWidget.DragDropMode.InternalMove)
@@ -1524,7 +1689,7 @@ class MainWindow(QWidget):
 
         # Draggable header bar
         drag_bar = QWidget(inner)
-        drag_bar.setFixedHeight(28)
+        drag_bar.setFixedHeight(_dp(28))
         drag_bar.setCursor(Qt.CursorShape.OpenHandCursor)
         drag_bar._dragging = False
         drag_bar._drag_origin = QPoint()
@@ -1551,7 +1716,7 @@ class MainWindow(QWidget):
         drag_bar.mouseReleaseEvent = _bar_release
 
         header = QHBoxLayout(drag_bar)
-        header.setContentsMargins(8, 0, 4, 0)
+        header.setContentsMargins(_dp(8), 0, _dp(4), 0)
         header.addStretch()
         close_btn = QPushButton('×', drag_bar)
         close_btn.setObjectName('PopupClose')
@@ -1573,8 +1738,8 @@ class MainWindow(QWidget):
         popup = self._create_popup(260)
         inner = popup._inner
         layout = QVBoxLayout(inner)
-        layout.setContentsMargins(16, 8, 16, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(_dp(16), _dp(8), _dp(16), _dp(12))
+        layout.setSpacing(_dp(6))
 
         self._bg_apply_timer = QTimer(self)
         self._bg_apply_timer.setSingleShot(True)
@@ -1623,8 +1788,8 @@ class MainWindow(QWidget):
         popup = self._create_popup(220)
         inner = popup._inner
         layout = QVBoxLayout(inner)
-        layout.setContentsMargins(16, 8, 16, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(_dp(16), _dp(8), _dp(16), _dp(12))
+        layout.setSpacing(_dp(8))
         layout.addWidget(QLabel(title, inner))
         from PyQt6.QtWidgets import QSpinBox
         spin = QSpinBox(inner)
@@ -2118,7 +2283,7 @@ class MainWindow(QWidget):
                 window=current_state.window,
                 artists=self._library_panel.artist_entries(),
                 ocs=self._library_panel.oc_entries(),
-                history=self._storage.load_history(),
+                history=self._storage.load_history(retention_days=current_state.settings.history_retention_days),
             )
         except Exception as exc:
             self._report_issue(
@@ -2159,12 +2324,14 @@ class MainWindow(QWidget):
 
             history_entries = self._storage.history_from_bundle(
                 bundle,
-                self._storage.load_history(),
+                self._storage.load_history(retention_days=self._state.settings.history_retention_days),
                 normalized_scopes,
             )
             if CONFIG_SCOPE_HISTORY in normalized_scopes:
-                self._storage.save_history(history_entries)
-                self._history_sidebar.set_entries(history_entries)
+                self._storage.save_history(history_entries, retention_days=self._state.settings.history_retention_days)
+                self._history_sidebar.set_entries(
+                    self._storage.load_history(retention_days=self._state.settings.history_retention_days)
+                )
         except ValueError as exc:
             self._report_issue(
                 'import_error',
@@ -2189,43 +2356,65 @@ class MainWindow(QWidget):
         self._translator.set_language(language)
         if previous == self._translator.get_language():
             return
+        self._state.settings.language = self._translator.get_language()
         self._label_card(self.prompt_card, 'widget_prompts')
         self._label_card(self.main_card, 'widget_main')
         self._label_card(self.metadata_viewer_card, 'widget_metadata_viewer')
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
         self._label_card(self.interrogator_card, 'interrogator')
         self.interrogator_widget.retranslate_ui()
+        self._library_panel.retranslate_ui()
         self._history_sidebar.retranslate_ui()
+        self._floating_tray.retranslate_ui()
         self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
         for index, widget_id in enumerate(sorted(self._example_cards), start=1):
             label = f"{self._translator.t('example')} {index}"
             self._card_labels[widget_id] = label
             self._example_cards[widget_id][0].set_title(label)
+        self._floating_tray.set_labels(self._card_labels)
         self._retranslate_ui()
         self._update_token_estimate()
         self._schedule_save()
 
+    def _toggle_language_quick(self) -> None:
+        target = 'en' if self._translator.get_language() == 'zh-CN' else 'zh-CN'
+        self._change_language(target)
+
+    def _send_shortcut_text(self) -> str:
+        return self.input_widget.send_shortcut_label()
+
     def _retranslate_ui(self) -> None:
         self.setWindowTitle(self._translator.t('app_title'))
+        self.btn_language.setText('中' if self._translator.get_language() == 'zh-CN' else 'EN')
+        self.btn_language.setToolTip(self._translator.t('language'))
         self.btn_settings.setToolTip(self._translator.t('settings'))
         self.btn_gallery.setToolTip(self._translator.t('image_manager'))
         self.btn_help.setToolTip(self._translator.t('shortcuts'))
-        self.btn_pin.setToolTip(self._translator.t('pin'))
+        self.btn_pin.setText('📌' if bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) else '📍')
+        self.btn_pin.setToolTip(
+            self._translator.t('pin_off') if bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) else self._translator.t('pin_on')
+        )
         self.btn_min.setToolTip(self._translator.t('minimize'))
         self.btn_max.setToolTip(self._translator.t('maximize'))
         self.btn_close.setToolTip(self._translator.t('close'))
         grip_title = self._translator.t('grip_title')
         resize_title = self._translator.t('resize_title')
         close_title = self._translator.t('tip_close_card')
-        self.prompt_card.retranslate_ui(grip_title, resize_title, close_title)
-        self.main_card.retranslate_ui(grip_title, resize_title, close_title)
+        pin_on = self._translator.t('pin_on')
+        pin_off = self._translator.t('pin_off')
+        self.prompt_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+        self.main_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+        self.metadata_viewer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+        self.metadata_destroyer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+        self.interrogator_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
         self.prompt_manager.retranslate_ui()
         self.input_widget.retranslate_ui()
+        self.input_widget.set_send_mode(self._state.settings.send_mode)
         self.settings_panel.retranslate_ui()
         self.dock_panel.set_close_label(self._translator.t('close'))
-        self._lib_tab_btn.setToolTip(self._translator.t('tip_library'))
+        self._lib_tab_btn.setToolTip(self._translator.t('artist_library'))
         for card, editor in self._example_cards.values():
-            card.retranslate_ui(grip_title, resize_title, close_title)
+            card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
             editor.retranslate_ui()
         self._refresh_dock_items()
 
@@ -2314,48 +2503,51 @@ class MainWindow(QWidget):
         self._schedule_save()
 
     def _toggle_library(self) -> None:
-        self._library_open = not self._library_open
-        if self._library_open:
-            self._library_panel.show()
-            self._library_panel.apply_theme()
-            self._lib_tab_btn.setText("▸")
+        self._state.settings.library_last_section = self._library_panel.current_section()
+        if self._right_sidebar_mode == 'library':
+            self._close_right_sidebar()
         else:
-            self._library_panel.hide()
-            self._lib_tab_btn.setText("◂")
+            self._open_right_sidebar('library')
         self._position_library()
 
     def _position_library(self) -> None:
-        """Position the library tab button and panel within the workspace."""
-        ws_w = self.workspace.width()
-        ws_h = self.workspace.height()
-        btn = self._lib_tab_btn
-        if self._library_open:
-            pw = self._library_panel.maximumWidth()
-            self._library_panel.move(ws_w - pw, 0)
-            self._library_panel.setFixedHeight(ws_h)
-            self._library_panel.raise_()
-            btn.move(ws_w - pw - btn.width(), 40)
+        if self._right_sidebar_mode != 'library':
+            return
+        card = self.main_card
+        sidebar = self._library_panel
+        sidebar.setFixedHeight(card.height())
+        if card._floating:
+            card_global = card.mapToGlobal(card.rect().topRight())
+            sidebar.move(card_global.x(), card_global.y())
         else:
-            btn.move(ws_w - btn.width(), 40)
-        btn.raise_()
+            sidebar.move(card.x() + card.width() + self._lib_tab_btn.width(), card.y())
+        sidebar.raise_()
 
     def _on_library_changed(self) -> None:
+        self._state.settings.library_last_section = self._library_panel.current_section()
         self._storage.save_library(
             self._library_panel.artist_entries(),
             self._library_panel.oc_entries(),
         )
 
+    def _on_library_section_changed(self, section: str) -> None:
+        self._state.settings.library_last_section = section
+        self._schedule_save()
+
     def _start_onboarding(self) -> None:
         from .widgets.onboarding import OnboardingOverlay, OnboardingStep
         t = self._translator.t
+        shortcut = self._send_shortcut_text()
         overlay = OnboardingOverlay(self.surface, self._translator)
         overlay.finished.connect(self._register_hints)
         overlay.set_steps([
             OnboardingStep(None, t("tour_welcome_title"), t("tour_welcome_desc")),
             OnboardingStep(self.btn_settings, t("tour_settings_title"), t("tour_settings_desc"), "below"),
-            OnboardingStep(self.main_card, t("tour_workbench_title"), t("tour_workbench_desc"), "right"),
+            OnboardingStep(self.main_card, t("tour_workbench_title"), t("tour_workbench_desc").format(shortcut=shortcut), "right"),
             OnboardingStep(self.prompt_card, t("tour_prompts_title"), t("tour_prompts_desc"), "right"),
             OnboardingStep(self._lib_tab_btn, t("tour_library_title"), t("tour_library_desc"), "left"),
+            OnboardingStep(self.btn_language, t("tour_language_title"), t("tour_language_desc"), "below"),
+            OnboardingStep(self.btn_pin, t("tour_pin_title"), t("tour_pin_desc"), "below"),
             OnboardingStep(self.btn_help, t("tour_shortcuts_title"), t("tour_shortcuts_desc"), "below"),
         ])
         overlay.start()
@@ -2363,8 +2555,9 @@ class MainWindow(QWidget):
     def _register_hints(self) -> None:
         """Register first-time-use hint bubbles on key widgets."""
         h = self._hint_manager
+        shortcut = self._send_shortcut_text()
         h.register(self.input_widget.send_button, "hint_send",
-                   "hint_send", position="above", delay_ms=2000)
+                   self._translator.t("hint_send").format(shortcut=shortcut), position="above", delay_ms=2000)
         h.register(self.prompt_manager.preview_button, "hint_preview",
                    "hint_preview", position="above", delay_ms=3000)
         h.register(self.btn_help, "hint_help",
@@ -2382,98 +2575,116 @@ class MainWindow(QWidget):
         self.main_card.raise_()
 
     def _toggle_history_sidebar(self) -> None:
-        self._history_open = not self._history_open
-        if self._history_open:
-            self._history_sidebar.apply_theme()
-            # If card is floating, sidebar must also be a top-level window
-            if self.main_card._floating:
-                self._history_sidebar.setParent(None)
-                self._history_sidebar.setWindowFlags(
-                    Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
-                    Qt.WindowType.WindowStaysOnTopHint
-                )
-            self._history_sidebar.animate_show()
-            self._history_tab_btn.setText("▷")
+        if self._right_sidebar_mode == 'history':
+            self._close_right_sidebar()
         else:
-            self._history_sidebar.animate_hide()
-            self._history_tab_btn.setText("◁")
-            # Return sidebar to workspace if it was floating
-            if self._history_sidebar.parent() is None:
-                QTimer.singleShot(250, lambda: self._history_sidebar.setParent(self.workspace))
+            self._open_right_sidebar('history')
         self._position_history_sidebar()
 
     def _position_history_btn(self) -> None:
-        """Position the history tab button just outside the right edge of main_card."""
+        self._position_right_rail()
+
+    def _position_right_rail(self) -> None:
         card = self.main_card
-        btn = self._history_tab_btn
         if not card.isVisible():
-            btn.hide()
-            if self._history_open:
-                self._history_sidebar.hide()
+            self._history_tab_btn.hide()
+            self._lib_tab_btn.hide()
+            self._history_sidebar.hide()
+            self._library_panel.hide()
             return
-        btn.show()
-        if btn.parent() is card:
-            # Floating mode: button is card's child, inside right edge
-            x = card.width() - btn.width()
-            y = (card.height() - btn.height()) // 2
+
+        buttons = [self._lib_tab_btn, self._history_tab_btn]
+        for button in buttons:
+            button.show()
+
+        if self._history_tab_btn.parent() is card:
+            x = card.width() - self._history_tab_btn.width()
+            center_y = (card.height() - (len(buttons) * self._history_tab_btn.height() + _dp(6))) // 2
         else:
-            # Workspace mode: button is workspace's child, position in workspace coords
             x = card.x() + card.width()
-            y = card.y() + (card.height() - btn.height()) // 2
-        btn.move(x, y)
-        btn.raise_()
+            center_y = card.y() + (card.height() - (len(buttons) * self._history_tab_btn.height() + _dp(6))) // 2
 
-    def _reparent_history_btn_to_card(self) -> None:
-        """Move history button to be a child of main_card (for floating mode)."""
-        btn = self._history_tab_btn
-        btn.setParent(self.main_card)
-        btn.show()
-        self._position_history_btn()
-        # Also reparent sidebar as independent window next to the card
-        if self._history_open:
-            self._history_sidebar.setParent(None)
-            self._history_sidebar.setWindowFlags(
-                Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
-                Qt.WindowType.WindowStaysOnTopHint
-            )
-            self._history_sidebar.show()
-            self._position_history_sidebar()
+        for index, button in enumerate(buttons):
+            button.move(x, center_y + index * (button.height() + _dp(6)))
+            button.raise_()
 
-    def _reparent_history_btn_to_workspace(self) -> None:
-        """Move history button back to workspace (when card returns from floating)."""
-        btn = self._history_tab_btn
-        btn.setParent(self.workspace)
-        btn.show()
-        # Return sidebar to workspace
-        if self._history_open:
-            self._history_sidebar.setParent(self.workspace)
-            self._history_sidebar.show()
-        QTimer.singleShot(50, self._position_history_btn)
-        QTimer.singleShot(50, self._position_history_sidebar)
+        self._position_history_sidebar()
+        self._position_library()
+
+    def _reparent_right_rail_to_card(self) -> None:
+        for button in (self._lib_tab_btn, self._history_tab_btn):
+            button.setParent(self.main_card)
+            button.show()
+        self._reparent_sidebar_for_mode(self._right_sidebar_mode, floating=True)
+        self._position_right_rail()
+
+    def _reparent_right_rail_to_workspace(self) -> None:
+        for button in (self._lib_tab_btn, self._history_tab_btn):
+            button.setParent(self.workspace)
+            button.show()
+        self._reparent_sidebar_for_mode(self._right_sidebar_mode, floating=False)
+        QTimer.singleShot(50, self._position_right_rail)
 
     def _on_main_card_visibility_changed(self) -> None:
-        """Called when main_card is docked/restored."""
-        QTimer.singleShot(50, self._position_history_btn)
+        QTimer.singleShot(50, self._position_right_rail)
 
     def _position_history_sidebar(self) -> None:
-        """Position the history sidebar next to main_card."""
-        if not self._history_open:
+        if self._right_sidebar_mode != 'history':
             return
         card = self.main_card
-        btn = self._history_tab_btn
         sidebar = self._history_sidebar
         sidebar.setFixedHeight(card.height())
 
         if card._floating:
-            # Floating: sidebar is a top-level window, use global coords
             card_global = card.mapToGlobal(card.rect().topRight())
             sidebar.move(card_global.x(), card_global.y())
         else:
-            # Workspace: sidebar is a workspace child
-            sidebar_x = card.x() + card.width() + btn.width()
+            sidebar_x = card.x() + card.width() + self._history_tab_btn.width()
             sidebar_y = card.y()
             sidebar.move(sidebar_x, sidebar_y)
         sidebar.raise_()
+
+    def _open_right_sidebar(self, mode: str) -> None:
+        self._close_right_sidebar(except_mode=mode)
+        self._right_sidebar_mode = mode
+        self._reparent_sidebar_for_mode(mode, floating=self.main_card._floating)
+        if mode == 'library':
+            self._library_panel.apply_theme()
+            self._library_panel.show()
+            self._lib_tab_btn.setText("▸")
+            self._history_tab_btn.setText("◁")
+            self._position_library()
+        elif mode == 'history':
+            self._history_sidebar.apply_theme()
+            self._history_sidebar.animate_show()
+            self._history_tab_btn.setText("▷")
+            self._lib_tab_btn.setText("◂")
+            self._position_history_sidebar()
+
+    def _close_right_sidebar(self, except_mode: str = '') -> None:
+        if except_mode != 'library':
+            self._library_panel.hide()
+            self._lib_tab_btn.setText("◂")
+        if except_mode != 'history':
+            self._history_sidebar.hide()
+            self._history_tab_btn.setText("◁")
+        self._right_sidebar_mode = except_mode if except_mode in {'library', 'history'} else ''
+
+    def _reparent_sidebar_for_mode(self, mode: str, *, floating: bool) -> None:
+        if mode == 'history':
+            self._reparent_sidebar_widget(self._history_sidebar, floating=floating)
+        elif mode == 'library':
+            self._reparent_sidebar_widget(self._library_panel, floating=floating)
+
+    def _reparent_sidebar_widget(self, widget: QWidget, *, floating: bool) -> None:
+        if floating:
+            widget.setParent(None)
+            widget.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+            widget.show()
+            return
+        widget.setParent(self.workspace)
+        widget.setWindowFlags(Qt.WindowType.Widget)
+        widget.show()
 
     def _show_menu_order_dialog_and_dismiss_hint(self) -> None:
         self._hint_manager.dismiss("hint_customize_menu")
@@ -2482,7 +2693,7 @@ class MainWindow(QWidget):
     def _show_shortcuts_panel(self) -> None:
         from .widgets.shortcuts_panel import ShortcutsPanel
         from PyQt6.QtGui import QCursor
-        panel = ShortcutsPanel(self._translator, parent=self)
+        panel = ShortcutsPanel(self._translator, send_mode=self._state.settings.send_mode, parent=self)
         panel.show_at(QCursor.pos())
 
     def _show_prompt_preview(self) -> None:
@@ -2541,8 +2752,8 @@ class MainWindow(QWidget):
         """)
 
         layout = QVBoxLayout(surface)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(_dp(16), _dp(12), _dp(16), _dp(12))
+        layout.setSpacing(_dp(8))
 
         from ._version import __version__
         title = QLabel(f"HainTag  v{__version__}", surface)
@@ -2563,13 +2774,13 @@ class MainWindow(QWidget):
                 font-size: {_fs('fs_11')};
             }}
         """)
-        text_edit.setMinimumHeight(300)
+        text_edit.setMinimumHeight(_dp(300))
         layout.addWidget(text_edit)
 
         root_layout = QVBoxLayout(popup)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.addWidget(surface)
-        popup.setFixedSize(400, 420)
+        popup.setFixedSize(_dp(400), _dp(420))
 
         # Position above the version label
         lbl_pos = self._version_label.mapToGlobal(QPoint(
@@ -2795,12 +3006,32 @@ class MainWindow(QWidget):
         if dialog.result_action == UpdateDialog.SKIP:
             self._state.settings.skipped_version = version.lstrip("vV")
             self._schedule_save()
+        elif dialog.result_action == UpdateDialog.UPDATE and dialog.extracted_dir:
+            self._apply_update(dialog.extracted_dir)
 
     def _show_no_update(self) -> None:
         from ._version import __version__
         from .updater import NoUpdateDialog
         dialog = NoUpdateDialog(__version__, self._translator, self)
         dialog.exec()
+
+    def _apply_update(self, extracted_dir: str) -> None:
+        import os
+        import subprocess
+        from .updater import _generate_update_script
+        script = _generate_update_script(
+            pid=os.getpid(),
+            source_dir=extracted_dir,
+            target_dir=os.path.dirname(sys.executable),
+            exe_path=sys.executable,
+        )
+        self._persist_state()
+        subprocess.Popen(
+            ["cmd.exe", "/c", script],
+            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+            close_fds=True,
+        )
+        QApplication.quit()
 
     # ── Destroy Templates ──
 

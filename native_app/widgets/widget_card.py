@@ -4,7 +4,7 @@ from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QFrame, QPushButton, QVBoxLayout, QWidget
 
 from ..theme import _fs, current_palette
-from ..ui_tokens import WIDGET_RESIZE_CORNER, WIDGET_RESIZE_EDGE, WIDGET_RESIZE_HINT
+from ..ui_tokens import WIDGET_RESIZE_CORNER, WIDGET_RESIZE_EDGE, WIDGET_RESIZE_HINT, _dp
 
 from PyQt6.QtWidgets import QLabel
 from .common import compute_resized_rect
@@ -33,13 +33,15 @@ class WidgetCard(QFrame):
         self._resize_direction = ""
         self._drag_strip_height = 36
         self._pinned = False
+        self._pin_on_title = "开启置顶"
+        self._pin_off_title = "取消顶置"
         self._floating = False
         self._workspace_parent = None
 
         self._content_host = QWidget(self)
         self._content_layout = QVBoxLayout(self._content_host)
-        self._content_layout.setContentsMargins(10, self._drag_strip_height, 10, 10)
-        self._content_layout.setSpacing(8)
+        self._content_layout.setContentsMargins(_dp(10), self._drag_strip_height, _dp(10), _dp(10))
+        self._content_layout.setSpacing(_dp(8))
 
         self._drag_strip = QWidget(self)
         self._drag_strip.setObjectName("WidgetDragStrip")
@@ -50,7 +52,7 @@ class WidgetCard(QFrame):
         self._grip = QPushButton("⠇", self._drag_strip)
         self._grip.setObjectName("WidgetGrip")
         self._grip.setCursor(Qt.CursorShape.OpenHandCursor)
-        self._grip.setFixedSize(48, 28)
+        self._grip.setFixedSize(_dp(48), _dp(28))
 
         self._title_label = QLabel("", self._drag_strip)
         self._title_label.setObjectName("WidgetCardTitle")
@@ -64,7 +66,7 @@ class WidgetCard(QFrame):
         self._close_btn = QPushButton("×", self._drag_strip)
         self._close_btn.setObjectName("WidgetCloseBtn")
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._close_btn.setFixedSize(24, 24)
+        self._close_btn.setFixedSize(_dp(24), _dp(24))
         self._close_btn.setFlat(True)
         self._close_btn.setToolTip("")  # set by retranslate_ui
         self._close_btn.clicked.connect(self._close_action)
@@ -72,7 +74,7 @@ class WidgetCard(QFrame):
         self._pin_btn = QPushButton("📌", self._drag_strip)
         self._pin_btn.setObjectName("WidgetPinBtn")
         self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._pin_btn.setFixedSize(24, 24)
+        self._pin_btn.setFixedSize(_dp(24), _dp(24))
         self._pin_btn.setFlat(True)
         self._pin_btn.setToolTip("Pin")
         self._pin_btn.clicked.connect(lambda: self._toggle_pin())
@@ -80,7 +82,7 @@ class WidgetCard(QFrame):
         self._resize_handle = QPushButton("◢", self)
         self._resize_handle.setObjectName("WidgetResizeHandle")
         self._resize_handle.setCursor(Qt.CursorShape.SizeFDiagCursor)
-        self._resize_handle.setFixedSize(WIDGET_RESIZE_HINT, WIDGET_RESIZE_HINT)
+        self._resize_handle.setFixedSize(_dp(WIDGET_RESIZE_HINT), _dp(WIDGET_RESIZE_HINT))
         self._resize_handle.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
         self._resize_handles: dict[str, QFrame] = {}
@@ -124,12 +126,22 @@ class WidgetCard(QFrame):
                 old_widget.setParent(None)
         self._content_layout.addWidget(widget)
 
-    def retranslate_ui(self, grip_title: str, resize_title: str, close_title: str = "") -> None:
+    def retranslate_ui(
+        self,
+        grip_title: str,
+        resize_title: str,
+        close_title: str = "",
+        pin_on_title: str = "开启置顶",
+        pin_off_title: str = "取消顶置",
+    ) -> None:
         self._drag_strip.setToolTip(grip_title)
         self._grip.setToolTip(grip_title)
         self._resize_handle.setToolTip(resize_title)
         if close_title:
             self._close_btn.setToolTip(close_title)
+        self._pin_on_title = pin_on_title
+        self._pin_off_title = pin_off_title
+        self._pin_btn.setToolTip(self._pin_off_title if self._pinned else self._pin_on_title)
 
     def resize_hotspot_rects(self) -> list[QRect]:
         rects: list[QRect] = []
@@ -247,12 +259,16 @@ class WidgetCard(QFrame):
     def _update_pin_style(self) -> None:
         p = current_palette()
         color = p['accent_text'] if self._pinned else p['text_dim']
+        bg = p['accent'] if self._pinned else 'transparent'
+        border = p['accent'] if self._pinned else 'transparent'
         self._pin_btn.setStyleSheet(
-            f"color: {color}; background: transparent; border: none; font-size: {_fs('fs_12')};"
+            f"color: {color}; background: {bg}; border: 1px solid {border}; border-radius: 4px; padding: 0 4px; font-size: {_fs('fs_12')};"
         )
         self._close_btn.setStyleSheet(
             f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
         )
+        self._pin_btn.setText('📌' if self._pinned else '📍')
+        self._pin_btn.setToolTip(self._pin_off_title if self._pinned else self._pin_on_title)
 
     def _toggle_pin(self) -> None:
         self._pinned = not self._pinned

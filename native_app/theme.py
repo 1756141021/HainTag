@@ -358,6 +358,7 @@ QLabel[class="SliderValue"],
 QLineEdit[class="FieldInput"],
 QSpinBox[class="FieldSpin"],
 QComboBox[class="FieldCombo"],
+QTextEdit[class="FieldInput"],
 QTextEdit[class="PromptTextEdit"],
 QTextEdit[class="SummaryTextEdit"],
 QTextEdit[class="InputEditor"],
@@ -377,6 +378,7 @@ QTextEdit[class="MetadataText"] {{
 QLineEdit[class="FieldInput"]:focus,
 QSpinBox[class="FieldSpin"]:focus,
 QComboBox[class="FieldCombo"]:focus,
+QTextEdit[class="FieldInput"]:focus,
 QTextEdit[class="PromptTextEdit"]:focus,
 QTextEdit[class="SummaryTextEdit"]:focus,
 QTextEdit[class="InputEditor"]:focus,
@@ -387,6 +389,7 @@ QTextEdit[class="MetadataText"]:focus {{
 }}
 
 QLineEdit[class="FieldInput"]::placeholder,
+QTextEdit[class="FieldInput"]::placeholder,
 QTextEdit[class="PromptTextEdit"]::placeholder,
 QTextEdit[class="SummaryTextEdit"]::placeholder,
 QTextEdit[class="InputEditor"]::placeholder,

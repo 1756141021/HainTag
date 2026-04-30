@@ -5,6 +5,7 @@ from PyQt6.QtGui import QColor, QMouseEvent, QPainter
 from PyQt6.QtWidgets import QCheckBox, QLabel
 
 from ..theme import is_theme_light
+from ..ui_tokens import _dp
 
 
 def compute_resized_rect(
@@ -66,7 +67,7 @@ class ToggleSwitch(QCheckBox):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(36, 18)
+        self.setFixedSize(_dp(36), _dp(18))
 
     def paintEvent(self, _event: object) -> None:
         painter = QPainter(self)
