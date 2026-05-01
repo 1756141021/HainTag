@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
+from ..file_filters import image_filter
 from ..models import ExampleEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
@@ -29,6 +30,7 @@ from ..ui_tokens import (
     CLS_IMAGE_SELECT_BUTTON,
     _dp,
 )
+from .text_context_menu import install_localized_context_menus
 
 
 class ExampleWidget(QWidget):
@@ -124,13 +126,14 @@ class ExampleWidget(QWidget):
 
         self.retranslate_ui()
         self._refresh_image_preview()
+        install_localized_context_menus(self, translator)
 
     def _select_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             self._translator.t("select_image"),
             "",
-            "Images (*.png *.jpg *.jpeg *.webp *.bmp)",
+            image_filter(self._translator),
         )
         if not file_path:
             return

@@ -197,13 +197,16 @@ class SettingsPanel(QWidget):
             s.valueChanged.connect(self.settings_changed)
             return s
 
-        def _inline_row(label_text, spin):
+        self._default_field_labels: dict[str, QLabel] = {}
+
+        def _inline_row(label_key, spin):
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(_dp(6))
-            lbl = QLabel(label_text, body)
+            lbl = QLabel(self._translator.t(label_key), body)
             lbl.setProperty('class', CLS_FIELD_LABEL)
             lbl.setFixedWidth(_dp(90))
+            self._default_field_labels[label_key] = lbl
             row.addWidget(lbl)
             row.addWidget(spin)
             row.addStretch()
@@ -214,10 +217,10 @@ class SettingsPanel(QWidget):
         self._def_oc_order = _default_spin(77, 9999)
         self._def_oc_depth = _default_spin(4, 999)
 
-        self.body_layout.addLayout(_inline_row("Example Order", self._def_example_order))
-        self.body_layout.addLayout(_inline_row("Example Depth", self._def_example_depth))
-        self.body_layout.addLayout(_inline_row("OC Order", self._def_oc_order))
-        self.body_layout.addLayout(_inline_row("OC Depth", self._def_oc_depth))
+        self.body_layout.addLayout(_inline_row("default_example_order", self._def_example_order))
+        self.body_layout.addLayout(_inline_row("default_example_depth", self._def_example_depth))
+        self.body_layout.addLayout(_inline_row("default_oc_order", self._def_oc_order))
+        self.body_layout.addLayout(_inline_row("default_oc_depth", self._def_oc_depth))
 
         # ── TAG extraction markers ──
         self.markers_label = self._add_label(body)
@@ -641,6 +644,8 @@ class SettingsPanel(QWidget):
         self.summary_prompt_label.setText(self._translator.t('summary_prompt'))
         self.summary_prompt_label.setToolTip(self._translator.t('tip_summary_prompt'))
         self.defaults_label.setText(self._translator.t('entry_defaults'))
+        for key, label in getattr(self, "_default_field_labels", {}).items():
+            label.setText(self._translator.t(key))
         self.markers_label.setText(self._translator.t('tag_markers'))
         self.markers_label.setToolTip(self._translator.t('tip_tag_markers'))
         self.export_button.setText(self._translator.t('export'))

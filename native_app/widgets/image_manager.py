@@ -57,8 +57,10 @@ from ..metadata.thumb_cache import ThumbCache
 from ..theme import _fs, current_palette, is_theme_light
 from ..ui_tokens import CLS_METADATA_TEXT, _dp
 from .collapsible_section import CollapsibleSection
+from .text_context_menu import apply_app_menu_style, install_localized_context_menus
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+_LIKE_BADGE_COLOR = "#c84646"
 
 # Win32 constants for frameless window resize
 if sys.platform == "win32":
@@ -133,6 +135,7 @@ class _StyledDialog(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self._result: str | None = None
+        self._translator = getattr(parent, "_t", None) or getattr(parent, "_translator", None)
         p = _p()
 
         surface = QWidget(self)
@@ -219,6 +222,8 @@ class _StyledDialog(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(surface)
         self.setFixedWidth(_dp(320))
+        if self._translator is not None:
+            install_localized_context_menus(self, self._translator)
         self.adjustSize()
 
     def _accept(self):
@@ -238,8 +243,19 @@ class _StyledDialog(QWidget):
             super().keyPressEvent(e)
 
     @staticmethod
+    def _labels(parent, confirm: str, cancel: str) -> tuple[str, str]:
+        translator = getattr(parent, "_t", None) or getattr(parent, "_translator", None)
+        if translator is not None:
+            if confirm == "OK":
+                confirm = translator.t("ok")
+            if cancel == "Cancel":
+                cancel = translator.t("cancel")
+        return confirm, cancel
+
+    @staticmethod
     def get_text(parent, title: str, label: str, default: str = "",
                  confirm: str = "OK", cancel: str = "Cancel") -> tuple[str, bool]:
+        confirm, cancel = _StyledDialog._labels(parent, confirm, cancel)
         dlg = _StyledDialog(title, label, default, confirm, cancel, "input", parent)
         dlg.move(QCursor.pos() - QPoint(160, 40))
         result = [None]
@@ -255,6 +271,7 @@ class _StyledDialog(QWidget):
     @staticmethod
     def confirm(parent, title: str, message: str,
                 confirm: str = "OK", cancel: str = "Cancel") -> bool:
+        confirm, cancel = _StyledDialog._labels(parent, confirm, cancel)
         dlg = _StyledDialog(title, "", message, confirm, cancel, "confirm", parent)
         dlg.move(QCursor.pos() - QPoint(160, 40))
         result = [False]
@@ -641,19 +658,22 @@ class ThumbnailDelegate(QStyledItemDelegate):
         # Like badge — minimal circle
         if path and path in self._likes:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(200, 70, 70, 200))
-            painter.drawEllipse(r.right() - 20, r.top() + 6, 14, 14)
-            painter.setPen(QColor(255, 255, 255))
+            badge = QColor(_LIKE_BADGE_COLOR)
+            badge.setAlpha(220)
+            painter.setBrush(badge)
+            size = _dp(14)
+            painter.drawEllipse(r.right() - _dp(20), r.top() + _dp(6), size, size)
+            painter.setPen(QColor(p['selection_text']))
             f = painter.font()
-            f.setPointSize(8)
+            f.setPixelSize(int(_fs('fs_8').removesuffix('px')))
             painter.setFont(f)
-            painter.drawText(r.right() - 20, r.top() + 6, 14, 14, Qt.AlignmentFlag.AlignCenter, "♥")
+            painter.drawText(r.right() - _dp(20), r.top() + _dp(6), size, size, Qt.AlignmentFlag.AlignCenter, "♥")
 
         # Filename — restrained, small
         nr = r.adjusted(6, r.height() - 18, -6, -3)
         painter.setPen(QColor(p['text_dim']))
         f = painter.font()
-        f.setPointSize(8)
+        f.setPixelSize(int(_fs('fs_8').removesuffix('px')))
         painter.setFont(f)
         fname = index.data(Qt.ItemDataRole.DisplayRole) or ""
         elided = painter.fontMetrics().elidedText(fname, Qt.TextElideMode.ElideMiddle, nr.width())
@@ -695,42 +715,46 @@ class LightboxOverlay(QWidget):
         self.update()
 
     def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        # Deep backdrop
-        p.fillRect(self.rect(), QColor(0, 0, 0, 230))
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         pal = _p()
+        # Deep backdrop
+        backdrop = QColor(pal.get('bg_backdrop', pal['bg']))
+        backdrop.setAlpha(230 if not is_theme_light() else 218)
+        painter.fillRect(self.rect(), backdrop)
         if self._pm and not self._pm.isNull():
-            pad = 60
-            avail = self.rect().adjusted(pad, pad, -pad, -pad - 30)
+            pad = _dp(60)
+            avail = self.rect().adjusted(pad, pad, -pad, -pad - _dp(30))
             sc = self._pm.scaled(avail.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             x = avail.x() + (avail.width() - sc.width()) // 2
             y = avail.y() + (avail.height() - sc.height()) // 2
-            p.drawPixmap(x, y, sc)
+            painter.drawPixmap(x, y, sc)
 
         # Bottom info — sparse, elegant
         if self._paths:
             fname = os.path.basename(self._paths[self._idx])
             info = f"{fname}     {self._idx + 1} / {len(self._paths)}"
-            p.setPen(QColor(pal['text_dim']))
-            f = p.font()
-            f.setPointSize(9)
+            painter.setPen(QColor(pal['text_dim']))
+            f = painter.font()
+            f.setPixelSize(int(_fs('fs_9').removesuffix('px')))
             f.setLetterSpacing(f.SpacingType.AbsoluteSpacing, 1)
-            p.setFont(f)
-            p.drawText(self.rect().adjusted(60, 0, -60, -20),
+            painter.setFont(f)
+            painter.drawText(self.rect().adjusted(_dp(60), 0, -_dp(60), -_dp(20)),
                        Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter, info)
 
         # Nav — minimal chevrons
-        p.setPen(QPen(QColor(255, 255, 255, 30), 1.5))
+        nav = QColor(pal['text'])
+        nav.setAlpha(38)
+        painter.setPen(QPen(nav, max(1, _dp(1.5))))
         h = self.height() // 2
         if self._idx > 0:
-            p.drawLine(28, h - 10, 22, h)
-            p.drawLine(22, h, 28, h + 10)
+            painter.drawLine(_dp(28), h - _dp(10), _dp(22), h)
+            painter.drawLine(_dp(22), h, _dp(28), h + _dp(10))
         if self._idx < len(self._paths) - 1:
             w = self.width()
-            p.drawLine(w - 28, h - 10, w - 22, h)
-            p.drawLine(w - 22, h, w - 28, h + 10)
-        p.end()
+            painter.drawLine(w - _dp(28), h - _dp(10), w - _dp(22), h)
+            painter.drawLine(w - _dp(22), h, w - _dp(28), h + _dp(10))
+        painter.end()
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Q):
@@ -1116,6 +1140,7 @@ class ImageManagerWindow(QWidget):
     action_requested = pyqtSignal(str, list)
     send_to_input = pyqtSignal(str)
     use_as_example = pyqtSignal(str)
+    send_to_interrogator = pyqtSignal(list)
     folder_changed = pyqtSignal(str)  # emitted when user selects a new folder
 
     def __init__(self, translator: Translator, initial_folder: str = "", storage=None, parent=None):
@@ -1127,6 +1152,7 @@ class ImageManagerWindow(QWidget):
         self._cache = ThumbCache(500)
         self._ts = 160
         self._likes: set[str] = storage.load_likes() if storage else set()
+        self._likes_only = False
         self._folder = initial_folder
         self._subfolder_mode = False
         self._cut_paths: list[str] = []  # internal clipboard for cut/paste
@@ -1160,9 +1186,9 @@ class ImageManagerWindow(QWidget):
         tbl.setContentsMargins(_dp(16), 0, _dp(8), 0)
         tbl.setSpacing(_dp(8))
 
-        title = QLabel(self._t.t("image_manager"), tb)
-        title.setObjectName("ImTitleLabel")
-        tbl.addWidget(title)
+        self._title_label = QLabel(self._t.t("image_manager"), tb)
+        self._title_label.setObjectName("ImTitleLabel")
+        tbl.addWidget(self._title_label)
         tbl.addStretch()
 
         # Folder button
@@ -1216,30 +1242,22 @@ class ImageManagerWindow(QWidget):
         bl.setContentsMargins(_dp(16), 0, _dp(16), 0)
         bl.setSpacing(_dp(16))
 
+        self._toolbar_labels: dict[str, QLabel] = {}
         for label_key, widget in self._toolbar_widgets(bar):
-            lbl = QLabel(label_key, bar)
+            lbl = QLabel(self._t.t(label_key), bar)
             lbl.setObjectName("ImToolLabel")
+            self._toolbar_labels[label_key] = lbl
             bl.addWidget(lbl)
             bl.addWidget(widget)
 
         bl.addStretch()
 
         # Sort
-        sort_btn = QPushButton(self._t.t("im_sort"), bar)
-        sort_btn.setObjectName("ImToolBtn")
-        sort_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sm = QMenu(self)
-        for key, label in [("mtime_desc", self._t.t("im_sort_newest")), ("mtime_asc", self._t.t("im_sort_oldest")),
-                           ("name_asc", "A → Z"), ("name_desc", "Z → A"),
-                           ("size_desc", self._t.t("im_sort_largest")), ("size_asc", self._t.t("im_sort_smallest"))]:
-            a = sm.addAction(label)
-            a.triggered.connect(lambda _, k=key: self._on_sort(k))
-        sm.addSeparator()
-        self._likes_filter_action = sm.addAction("♥ " + self._t.t("im_likes_only"))
-        self._likes_filter_action.setCheckable(True)
-        self._likes_filter_action.toggled.connect(self._toggle_likes_filter)
-        sort_btn.setMenu(sm)
-        bl.addWidget(sort_btn)
+        self._sort_btn = QPushButton(self._t.t("im_sort"), bar)
+        self._sort_btn.setObjectName("ImToolBtn")
+        self._sort_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rebuild_sort_menu()
+        bl.addWidget(self._sort_btn)
 
         # Subfolders toggle
         self._subfolder_btn = QPushButton(self._t.t("im_subfolders"), bar)
@@ -1321,6 +1339,7 @@ class ImageManagerWindow(QWidget):
         sb = self._view.verticalScrollBar()
         if sb:
             sb.valueChanged.connect(self._on_scroll)
+        install_localized_context_menus(self, self._t)
 
     def _on_scroll(self):
         # Auto-fetch more items when scrolling near bottom
@@ -1337,7 +1356,7 @@ class ImageManagerWindow(QWidget):
         spin.setValue(50)
         spin.setFixedWidth(_dp(60))
         self._buf_spin = spin
-        items.append((self._t.t("im_buffer_size"), spin))
+        items.append(("im_buffer_size", spin))
 
         slider = QSlider(Qt.Orientation.Horizontal, parent)
         slider.setRange(96, 256)
@@ -1345,8 +1364,38 @@ class ImageManagerWindow(QWidget):
         slider.setFixedWidth(_dp(100))
         slider.valueChanged.connect(self._on_size)
         self._slider = slider
-        items.append((self._t.t("im_thumb_size"), slider))
+        items.append(("im_thumb_size", slider))
         return items
+
+    def _rebuild_sort_menu(self) -> None:
+        sm = QMenu(self)
+        apply_app_menu_style(sm)
+        for key, label_key in [
+            ("mtime_desc", "im_sort_newest"),
+            ("mtime_asc", "im_sort_oldest"),
+            ("name_asc", "sort_name_asc"),
+            ("name_desc", "sort_name_desc"),
+            ("size_desc", "im_sort_largest"),
+            ("size_asc", "im_sort_smallest"),
+        ]:
+            action = sm.addAction(self._t.t(label_key))
+            action.triggered.connect(lambda _checked=False, k=key: self._on_sort(k))
+        sm.addSeparator()
+        self._likes_filter_action = sm.addAction("♥ " + self._t.t("im_likes_only"))
+        self._likes_filter_action.setCheckable(True)
+        self._likes_filter_action.setChecked(self._likes_only)
+        self._likes_filter_action.toggled.connect(self._toggle_likes_filter)
+        self._sort_btn.setMenu(sm)
+
+    def retranslate_ui(self) -> None:
+        self._title_label.setText(self._t.t("image_manager"))
+        self._folder_btn.setText(self._t.t("im_select_folder"))
+        self._sort_btn.setText(self._t.t("im_sort"))
+        self._subfolder_btn.setText(self._t.t("im_subfolders"))
+        for key, label in getattr(self, "_toolbar_labels", {}).items():
+            label.setText(self._t.t(key))
+        self._rebuild_sort_menu()
+        self._update_status()
 
     def apply_theme(self):
         """Re-apply theme colors. Call after main window theme switch."""
@@ -1445,7 +1494,9 @@ class ImageManagerWindow(QWidget):
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
-        painter.setPen(QPen(QColor(80, 80, 80, 30), 1))
+        line = QColor(_p()['line'])
+        line.setAlpha(90)
+        painter.setPen(QPen(line, max(1, _dp(1))))
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
         painter.end()
 
@@ -1604,6 +1655,7 @@ class ImageManagerWindow(QWidget):
             QTimer.singleShot(200, self._req_thumbs)
 
     def _toggle_likes_filter(self, checked: bool):
+        self._likes_only = checked
         if checked and self._folder:
             # Filter to only liked images
             liked = [p for p in self._model._all if p in self._likes]
@@ -1678,6 +1730,7 @@ class ImageManagerWindow(QWidget):
         paths = [self._model.path_at(i) for i in idxs if self._model.path_at(i)]
         t = self._t
         menu = QMenu(self)
+        apply_app_menu_style(menu)
 
         # No selection — empty area menu
         if not paths:
@@ -1705,6 +1758,7 @@ class ImageManagerWindow(QWidget):
         file_paths = [p for p in paths if not os.path.isdir(p)]
         if file_paths and not self._subfolder_mode:
             move_menu = menu.addMenu(t.t("im_move_to"))
+            apply_app_menu_style(move_menu)
             dirs = self._model._dirs if hasattr(self._model, '_dirs') else []
             for d in dirs:
                 a = move_menu.addAction(os.path.basename(d))
@@ -1718,6 +1772,7 @@ class ImageManagerWindow(QWidget):
         delete_act = menu.addAction(t.t("im_delete"))
         menu.addSeparator()
         send_act = menu.addAction(t.t("metadata_send_to_input"))
+        interrogator_act = menu.addAction(t.t("im_send_to_interrogator"))
         ex_act = menu.addAction(t.t("metadata_use_as_example"))
         menu.addSeparator()
         like_act = menu.addAction("♥ " + t.t("im_like"))
@@ -1768,6 +1823,8 @@ class ImageManagerWindow(QWidget):
             meta = MetadataReader().read_metadata(paths[0])
             if meta and meta.positive_prompt:
                 self.send_to_input.emit(meta.positive_prompt)
+        elif chosen == interrogator_act:
+            self.send_to_interrogator.emit(file_paths or paths)
         elif chosen == ex_act:
             self.use_as_example.emit(paths[0])
         elif chosen == rename_act:

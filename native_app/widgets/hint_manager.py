@@ -19,7 +19,7 @@ from ..ui_tokens import _dp
 class HintBubble(QWidget):
     """A small floating tooltip bubble that auto-dismisses."""
 
-    def __init__(self, text: str, parent=None):
+    def __init__(self, text: str, ok_label: str = "OK", parent=None):
         super().__init__(parent,
                          Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.WindowStaysOnTopHint)
@@ -45,7 +45,7 @@ class HintBubble(QWidget):
         )
         layout.addWidget(lbl, 1)
 
-        got_it_btn = QPushButton("OK", surface)
+        got_it_btn = QPushButton(ok_label, surface)
         got_it_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         got_it_btn.setStyleSheet(
             f"color: {p['accent_text']}; background: {p['accent']}; border: none; "
@@ -145,7 +145,7 @@ class HintManager:
         text = self._translator.t(text_key)
         if not text or text == text_key:
             text = text_key
-        bubble = HintBubble(text)
+        bubble = HintBubble(text, self._translator.t("ok"))
         bubble.show_near(widget, position)
         self._active_bubbles.append(bubble)
         self._shown.add(hint_id)
@@ -155,7 +155,7 @@ class HintManager:
                   position: str = "below") -> None:
         """Force-show a hint regardless of whether it was shown before."""
         text = self._translator.t(text_key)
-        bubble = HintBubble(text)
+        bubble = HintBubble(text, self._translator.t("ok"))
         bubble.show_near(widget, position)
         self._active_bubbles.append(bubble)
 

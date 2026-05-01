@@ -93,7 +93,7 @@ def build_messages(
     active_input = extract_active_input(input_text, memory_mode)
     prompt_items = [item for item in prompts if item.enabled and item.content.strip()]
     example_items = [item for item in examples if item.description.strip() and item.tags.strip()]
-    oc_items = [oc for oc in (ocs or []) if oc.enabled and oc.tags.strip()]
+    oc_items = [oc for oc in (ocs or []) if oc.enabled and oc.merged_tags().strip()]
 
     entries: list = sorted(
         [*prompt_items, *example_items, *oc_items],

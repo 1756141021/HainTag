@@ -19,10 +19,12 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
+from ..file_filters import image_filter
 from ..metadata import MetadataReader, ImageMetadata
-from ..theme import current_palette, is_theme_light
+from ..theme import current_palette
 from ..ui_tokens import CLS_FIELD_LABEL, CLS_METADATA_FRAME, CLS_METADATA_TEXT, _dp
 from .collapsible_section import CollapsibleSection
+from .text_context_menu import install_localized_context_menus
 
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -331,6 +333,7 @@ class MetadataViewerWidget(QWidget):
         edit.setReadOnly(True)
         edit.setMaximumHeight(_dp(120))
         edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        install_localized_context_menus(edit, self._translator)
         return wrap_with_resize_handle(edit, self._scroll_content)
 
     def _make_copy_btn(self, callback) -> QPushButton:
@@ -346,7 +349,7 @@ class MetadataViewerWidget(QWidget):
     def _pick_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, self._translator.t("select_image"), "",
-            "Images (*.png *.jpg *.jpeg *.webp *.bmp)",
+            image_filter(self._translator),
         )
         if path:
             self.load_image(path)

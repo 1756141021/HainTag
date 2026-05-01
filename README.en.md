@@ -40,6 +40,19 @@ Head to **[Releases](https://github.com/1756141021/HainTag/releases)** and grab 
 
 ---
 
+### What's new in 0.9.1
+
+This release focuses on closing real interaction gaps in the workbench instead of only changing visuals. Context menus, OC shortcuts, history, the floating tray, and image interrogation are wired back into the existing data and settings paths.
+
+| Update | Details |
+|--------|---------|
+| **Workbench v3** | The output area is now an editable TAG stream with hover hints, category colors, left-drag reorder, right-drag weight scrubbing, and Full / No-Character tabs |
+| **Shorter OC flow** | The titlebar `+` opens an in-place OC picker; chips support quick outfit / Order / Depth changes and a right-click management menu |
+| **History timeline** | Recent generations appear at the bottom of the workbench; the full history panel can restore input, full TAGs, and no-character TAGs |
+| **Floating tray** | Nearby floating cards can collapse into a compact tray; when only one card remains, it restores automatically and the tray hides |
+| **Unified menus** | Input, output, library, history, Dock, and tray context menus now use the same i18n, theme, font, and scaling interfaces |
+| **Image interrogation** | Local and LLM interrogation share one card-level mode switch while keeping batch images, presets, thresholds, category colors, and copy/send actions |
+
 ### Worried about bloat?
 
 Every feature in HainTag lives in its own card — if you don't open it, it doesn't exist. No extra memory overhead. The app is lightweight by design; after sitting idle for a while, memory usage drops even further.
@@ -50,7 +63,7 @@ Every feature in HainTag lives in its own card — if you don't open it, it does
 
 #### Floating Cards & Always-on-Top
 
-Drag any card out of the main window into an independent floating panel. Pin the main window on top. Place your TAG output next to WebUI and work side by side — especially useful with multiple monitors.
+Drag any card out of the main window into an independent floating panel. Pin the main window on top. Place your TAG output next to WebUI and work side by side — especially useful with multiple monitors. Multiple floating cards can also be grouped into the floating tray and restored on demand.
 
 ---
 
@@ -62,6 +75,7 @@ Drag any card out of the main window into an independent floating panel. Pin the
 - **Weight scrubbing** — Right-click drag a tag to adjust weight in real time; bracket syntax updates automatically
 - **Drag-to-reorder** — Left-click drag to rearrange tag order
 - **TAG extraction markers** — Customizable `[TAGS]...[/TAGS]` to extract tags from verbose LLM output
+- **Generation timeline** — Recent generations are visible in the workbench, with the full history one click away
 
 #### Prompt & Context Management
 
@@ -75,6 +89,7 @@ Drag any card out of the main window into an independent floating panel. Pin the
 - **Artist library** — Store artist names, LoRA/trigger words, and reference images; one-click copy
 - **OC character library** — Manage original characters with an outfit subsystem (multiple outfits, individually toggled)
 - **Insertion control** — Per-character/outfit Order and Depth settings
+- **Titlebar OC chips** — Active OCs appear directly in the workbench titlebar for quick add, outfit switching, editing, or removal
 
 #### Image Manager
 

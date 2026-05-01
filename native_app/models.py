@@ -59,10 +59,12 @@ CONFIG_FINE_SCOPES = [
     CONFIG_SCOPE_HISTORY,
 ]
 DEFAULT_DOCK_COLLAPSED_THICKNESS = 40
-DEFAULT_DOCK_EXPANDED_VERTICAL_SIZE = 132
+DEFAULT_DOCK_EXPANDED_VERTICAL_SIZE = 188
 DEFAULT_DOCK_EXPANDED_HORIZONTAL_SIZE = 84
 SEND_MODE_ENTER = "enter"
 SEND_MODE_CTRL_ENTER = "ctrl_enter"
+DEFAULT_TAGGER_LOCAL_CATEGORIES = ["general", "character", "copyright"]
+TAGGER_LOCAL_CATEGORIES = {"general", "character", "copyright", "meta", "model", "rating", "quality", "artist"}
 
 
 @dataclass
@@ -195,6 +197,7 @@ class HistoryEntry:
     nochar_text: str = ""
     timestamp: str = ""
     model: str = ""
+    tag_categories: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "HistoryEntry":
@@ -204,6 +207,10 @@ class HistoryEntry:
             nochar_text=str(data.get("nochar_text", "")),
             timestamp=str(data.get("timestamp", "")),
             model=str(data.get("model", "")),
+            tag_categories={
+                str(key): str(value)
+                for key, value in (data.get("tag_categories") or {}).items()
+            } if isinstance(data.get("tag_categories"), dict) else {},
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -241,7 +248,7 @@ class WidgetState:
 @dataclass
 class DockState:
     position: str = DockPosition.LEFT
-    expanded: bool = False
+    expanded: bool = True
     collapsed_thickness: int = DEFAULT_DOCK_COLLAPSED_THICKNESS
     expanded_vertical_size: int = DEFAULT_DOCK_EXPANDED_VERTICAL_SIZE
     expanded_horizontal_size: int = DEFAULT_DOCK_EXPANDED_HORIZONTAL_SIZE
@@ -250,6 +257,7 @@ class DockState:
     floating_width: int = 160
     floating_height: int = 220
     last_docked_position: str = DockPosition.LEFT
+    list_default_v2: bool = True
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DockState":
@@ -259,9 +267,10 @@ class DockState:
             legacy_size = 0
         legacy_expanded_size = legacy_size if legacy_size > DEFAULT_DOCK_COLLAPSED_THICKNESS else 0
 
+        migrated_list_default = bool(data.get("list_default_v2", False))
         return cls(
             position=str(data.get("position", DockPosition.LEFT)),
-            expanded=bool(data.get("expanded", False)),
+            expanded=bool(data.get("expanded", True)) if migrated_list_default else True,
             collapsed_thickness=clamp_int(
                 data.get("collapsed_thickness", DEFAULT_DOCK_COLLAPSED_THICKNESS),
                 DEFAULT_DOCK_COLLAPSED_THICKNESS,
@@ -282,6 +291,7 @@ class DockState:
             floating_width=int(data.get("floating_width", 160) or 160),
             floating_height=int(data.get("floating_height", 220) or 220),
             last_docked_position=str(data.get("last_docked_position", DockPosition.LEFT)),
+            list_default_v2=True,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -432,6 +442,12 @@ class AppSettings:
     # Tagger
     tagger_model_dir: str = ""
     tagger_python_path: str = ""
+    tagger_local_enabled_categories: list[str] = field(default_factory=lambda: list(DEFAULT_TAGGER_LOCAL_CATEGORIES))
+    tagger_local_general_threshold: int = 35
+    tagger_local_character_threshold: int = 70
+    tagger_local_show_confidence: bool = True
+    tagger_local_preview_ratio: int = 22
+    tagger_local_layout_v2: bool = True
     # LLM Tagger
     tagger_llm_use_separate: bool = False
     tagger_llm_base_url: str = ""
@@ -439,6 +455,10 @@ class AppSettings:
     tagger_llm_model: str = ""
     tagger_llm_presets: list = field(default_factory=list)
     tagger_llm_active_preset: int = 0
+    tagger_llm_layout_density: str = "comfortable"
+    tagger_llm_preview_ratio: int = 42
+    tagger_llm_thumb_size: int = 38
+    tagger_llm_tag_density: int = 2
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
@@ -450,6 +470,18 @@ class AppSettings:
                 top_k = max(0, int(top_k_raw))
             except (TypeError, ValueError):
                 top_k = None
+
+        local_categories_raw = data.get("tagger_local_enabled_categories", DEFAULT_TAGGER_LOCAL_CATEGORIES)
+        if isinstance(local_categories_raw, (list, tuple, set)):
+            local_categories = [str(cat) for cat in local_categories_raw if str(cat) in TAGGER_LOCAL_CATEGORIES]
+        else:
+            local_categories = []
+        if not local_categories:
+            local_categories = list(DEFAULT_TAGGER_LOCAL_CATEGORIES)
+        local_layout_v2 = bool(data.get("tagger_local_layout_v2", False))
+        local_preview_ratio = clamp_int(data.get("tagger_local_preview_ratio", 22), 22, 12, 70)
+        if not local_layout_v2 and local_preview_ratio == 30:
+            local_preview_ratio = 22
 
         return cls(
             api_base_url=str(data.get("api_base_url", data.get("apiUrl", ""))),
@@ -493,12 +525,26 @@ class AppSettings:
             active_destroy_template=str(data.get("active_destroy_template", "") or ""),
             tagger_model_dir=str(data.get("tagger_model_dir", "") or ""),
             tagger_python_path=str(data.get("tagger_python_path", "") or ""),
+            tagger_local_enabled_categories=local_categories,
+            tagger_local_general_threshold=clamp_int(data.get("tagger_local_general_threshold", 35), 35, 5, 95),
+            tagger_local_character_threshold=clamp_int(data.get("tagger_local_character_threshold", 70), 70, 5, 95),
+            tagger_local_show_confidence=bool(data.get("tagger_local_show_confidence", True)),
+            tagger_local_preview_ratio=local_preview_ratio,
+            tagger_local_layout_v2=True,
             tagger_llm_use_separate=bool(data.get("tagger_llm_use_separate", False)),
             tagger_llm_base_url=str(data.get("tagger_llm_base_url", "") or ""),
             tagger_llm_api_key=str(data.get("tagger_llm_api_key", "") or ""),
             tagger_llm_model=str(data.get("tagger_llm_model", "") or ""),
             tagger_llm_presets=_migrate_llm_presets(data),
             tagger_llm_active_preset=int(data.get("tagger_llm_active_preset", 0) or 0),
+            tagger_llm_layout_density=(
+                str(data.get("tagger_llm_layout_density", "comfortable") or "comfortable")
+                if str(data.get("tagger_llm_layout_density", "comfortable") or "comfortable") in {"compact", "comfortable", "spacious"}
+                else "comfortable"
+            ),
+            tagger_llm_preview_ratio=clamp_int(data.get("tagger_llm_preview_ratio", 42), 42, 18, 78),
+            tagger_llm_thumb_size=clamp_int(data.get("tagger_llm_thumb_size", 38), 38, 28, 72),
+            tagger_llm_tag_density=clamp_int(data.get("tagger_llm_tag_density", 2), 2, 1, 3),
         )
 
     def to_dict(self) -> dict[str, Any]:

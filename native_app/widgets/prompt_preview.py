@@ -15,6 +15,17 @@ from PyQt6.QtWidgets import (
 from ..logic import estimate_text_tokens
 from ..theme import _fs, current_palette
 from ..ui_tokens import _dp
+from .text_context_menu import install_localized_context_menus
+
+
+def _tr(widget: QWidget | None, key: str, fallback: str) -> str:
+    window = widget.window() if widget is not None else None
+    translator = getattr(window, "_translator", None)
+    if translator is not None:
+        value = translator.t(key)
+        if value and value != key:
+            return value
+    return fallback
 
 
 ROLE_COLORS = {
@@ -121,7 +132,7 @@ class PromptPreviewPopup(QWidget):
             )
             header_row.addWidget(role_label)
             header_row.addStretch()
-            tk_label = QLabel(f"{tokens} tk", section)
+            tk_label = QLabel(_tr(self, "prompt_preview_token_short", "{count} tk").format(count=tokens), section)
             tk_label.setStyleSheet(
                 f"color: {p['text_dim']}; font-size: {_fs('fs_9')}; background: transparent;"
             )
@@ -132,6 +143,9 @@ class PromptPreviewPopup(QWidget):
             preview = QTextEdit(section)
             preview.setReadOnly(True)
             preview.setPlainText(content)
+            translator = getattr(self.window(), "_translator", None)
+            if translator is not None:
+                install_localized_context_menus(preview, translator)
             # Limit height
             line_count = content.count('\n') + 1
             height = min(max(_dp(40), line_count * _dp(16) + _dp(12)), _dp(120))
@@ -154,7 +168,8 @@ class PromptPreviewPopup(QWidget):
 
         # Update header with total
         total_tokens += 2  # array overhead
-        self._header.setText(f"{title}    {total_tokens} tokens")
+        token_text = _tr(self, "prompt_preview_tokens", "{count} tokens").format(count=total_tokens)
+        self._header.setText(f"{title}    {token_text}")
 
         # Auto-size height
         section_count = len(messages)

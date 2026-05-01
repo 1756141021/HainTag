@@ -41,8 +41,9 @@ from functools import partial
 
 from .api_client import ChatWorker
 from .error_reporting import report_error, safe_context_from_settings
+from .file_filters import config_filter, image_filter, json_filter, ttf_filter
 from .font_loader import build_body_font
-from .theme import _fs
+from .theme import _fs, current_palette
 from .i18n import Translator
 from .logic import build_messages, estimate_messages_tokens, normalize_api_base_url, validate_examples
 from .models import (
@@ -51,6 +52,9 @@ from .models import (
     DockState,
     ExampleEntry,
     FloatingTrayMemberState,
+    FloatingTrayState,
+    HistoryEntry,
+    OCEntry,
     WidgetState,
     WindowState,
     DEFAULT_WINDOW_HEIGHT,
@@ -93,14 +97,19 @@ from .widgets.metadata_viewer import MetadataViewerWidget
 from .widgets.metadata_destroyer import MetadataDestroyerWidget
 from .widgets.image_manager import ImageManagerWindow
 from .widgets.tag_completer import install_completer
+from .widgets.text_context_menu import add_text_edit_actions, apply_app_menu_style, handle_text_edit_action, install_localized_context_menus
 from .tag_dictionary import TagDictionary
 from .widgets.output_widget import OutputWidget
 from .widgets.prompt_manager import PromptManagerWidget
 from .widgets.settings_panel import SettingsPanel
 from .widgets.widget_card import WidgetCard
+from .widgets.workbench_oc import WorkbenchOCStrip
+from .widgets.workbench_timeline import WorkbenchTimeline
 from .widgets.workspace import DockQueryResult, Workspace
 
 _CONVERSATION_HISTORY_MAX_MESSAGES = 20
+_FLOATING_TRAY_PROTECTED_WIDGET_IDS: set[str] = set()
+_FLOATING_TRAY_RESTORE_ON_PERSIST_WIDGET_IDS = {"widget-main"}
 
 if sys.platform == "win32":
     GWL_STYLE = -16
@@ -152,6 +161,41 @@ class SummaryDialog(QDialog):
 
 
 class MainWindow(QWidget):
+    _STATE_ONLY_SETTINGS_FIELDS = (
+        "theme",
+        "card_opacity",
+        "custom_bg_image",
+        "bg_blur",
+        "bg_opacity",
+        "bg_brightness",
+        "workspace_menu_order",
+        "image_manager_folder",
+        "send_mode",
+        "history_retention_days",
+        "library_last_section",
+        "skipped_version",
+        "destroy_templates",
+        "active_destroy_template",
+        "tagger_model_dir",
+        "tagger_python_path",
+        "tagger_local_enabled_categories",
+        "tagger_local_general_threshold",
+        "tagger_local_character_threshold",
+        "tagger_local_show_confidence",
+        "tagger_local_preview_ratio",
+        "tagger_local_layout_v2",
+        "tagger_llm_use_separate",
+        "tagger_llm_base_url",
+        "tagger_llm_api_key",
+        "tagger_llm_model",
+        "tagger_llm_presets",
+        "tagger_llm_active_preset",
+        "tagger_llm_layout_density",
+        "tagger_llm_preview_ratio",
+        "tagger_llm_thumb_size",
+        "tagger_llm_tag_density",
+    )
+
     def __init__(self, storage: AppStorage, translator: Translator) -> None:
         super().__init__()
         self._storage = storage
@@ -159,6 +203,8 @@ class MainWindow(QWidget):
         self._has_persisted_state = storage.settings_path.exists()
         self._state = storage.load_state()
         self._translator.set_language(self._state.settings.language)
+        from .ui_tokens import set_app_ui_scale
+        set_app_ui_scale(self._state.settings.ui_scale_percent)
 
         self._worker: ChatWorker | None = None
         self._current_mode = 'chat'
@@ -170,6 +216,9 @@ class MainWindow(QWidget):
         self._next_example_index = 1
         self._example_cards: dict[str, tuple[WidgetCard, ExampleWidget]] = {}
         self._card_labels: dict[str, str] = {}
+        self._floating_tray_check_pending: set[str] = set()
+        self._current_history_entry: HistoryEntry | None = None
+        self._syncing_history_output = False
         self._settings_reveal = 0
         self._applying_shell_layout = False
         self._report_cooldowns: dict[str, float] = {}
@@ -240,15 +289,17 @@ class MainWindow(QWidget):
         self._version_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._version_label.setFlat(True)
         self._version_label.clicked.connect(self._show_changelog)
-        self._version_label.setToolTip("Changelog")
+        self._version_label.setToolTip(self._translator.t("changelog"))
 
         # Library sidebar
         from .widgets.library_panel import LibraryPanel
         self._library_panel = LibraryPanel(self._translator, self._storage, self.workspace)
         self._library_panel.hide()
+        self._sidebar_anchor_global: QPoint | None = None
         self._library_panel.changed.connect(self._on_library_changed)
         self._library_panel.width_changed.connect(lambda _: self._position_library())
         self._library_panel.section_changed.connect(self._on_library_section_changed)
+        self._library_panel.close_requested.connect(self._close_sidebar)
 
         self._lib_tab_btn = QPushButton("◂", self.workspace)
         self._lib_tab_btn.setObjectName("LibTabBtn")
@@ -300,34 +351,78 @@ class MainWindow(QWidget):
         self._label_card(self.prompt_card, 'widget_prompts')
 
         self.main_card = WidgetCard('widget-main', min_size=QSize(520, 400), parent=self.workspace)
-        main_container = QWidget(self.main_card)
-        main_root = QVBoxLayout(main_container)
+        self.main_card.set_workbench_chrome(True)
+        pal = current_palette()
+        self.main_card.setStyleSheet(
+            f"#WidgetCard {{ background: {pal['bg_card']}; border: 1px solid {pal['line_hover']}; border-radius: {_dp(4)}px; }}"
+            f"#WidgetCard:hover {{ border-color: {pal['line_strong']}; }}"
+            f"#WidgetDragStrip {{ background: {pal['bg_card_strip']}; border-top-left-radius: {_dp(4)}px; border-top-right-radius: {_dp(4)}px; border-bottom: 1px solid {pal['line']}; }}"
+            f"#WidgetDragStrip:hover {{ background: {pal['bg_card_strip_hover']}; }}"
+            f"QPushButton#WidgetGrip {{ color: {pal['text_dim']}; background: transparent; border: none; border-radius: {_dp(3)}px; font-size: {_fs('fs_13')}; }}"
+            f"QPushButton#WidgetGrip:hover {{ background: {pal['hover_bg_strong']}; color: {pal['text_muted']}; }}"
+            f"QPushButton#WidgetCloseBtn, QPushButton#WidgetPinBtn {{ background: transparent; border: none; color: {pal['text_muted']}; border-radius: {_dp(3)}px; font-size: {_fs('fs_12')}; }}"
+            f"QPushButton#WidgetCloseBtn:hover, QPushButton#WidgetPinBtn:hover {{ background: {pal['hover_bg_strong']}; color: {pal['text']}; }}"
+            f"QPushButton#WidgetResizeHandle {{ color: {pal['text_label']}; background: transparent; border: none; font-size: {_fs('fs_9')}; }}"
+        )
+        self.main_card.set_content_margins(0, None, 0, 0)
+        self._workbench_oc_strip = WorkbenchOCStrip(self._translator, self.main_card)
+        self._workbench_oc_strip.set_entries(ocs)
+        self._workbench_oc_strip.add_requested.connect(self._show_oc_add_menu)
+        self._workbench_oc_strip.edit_requested.connect(self._edit_oc_entry)
+        self._workbench_oc_strip.remove_requested.connect(self._remove_oc_entry)
+        self._workbench_oc_strip.open_library_requested.connect(lambda pos: self._open_library_section("oc", toggle=True, anchor=pos))
+        self._workbench_oc_strip.oc_changed.connect(self._update_oc_entry)
+        self.main_card.set_title_extra_widget(self._workbench_oc_strip)
+        self._main_container = QWidget(self.main_card)
+        self._main_container.setObjectName("WorkbenchMainContainer")
+        self._main_container.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._main_container.customContextMenuRequested.connect(self._show_workbench_menu)
+        main_root = QVBoxLayout(self._main_container)
         main_root.setContentsMargins(0, 0, 0, 0)
         main_root.setSpacing(0)
-        self._main_splitter = QSplitter(Qt.Orientation.Vertical, main_container)
+        self._main_splitter = QSplitter(Qt.Orientation.Vertical, self._main_container)
         self._main_splitter.setChildrenCollapsible(False)
-        self._main_splitter.setHandleWidth(6)
+        self._main_splitter.setObjectName("WorkbenchMainSplitter")
+        self._main_splitter.setHandleWidth(_dp(1))
         self.output_widget = OutputWidget(self._translator, self._main_splitter)
-        self.input_widget = InputWidget(self._translator, self._main_splitter)
+        self._main_bottom_panel = QWidget(self._main_splitter)
+        self._main_bottom_panel.setObjectName("WorkbenchBottomPanel")
+        bottom_layout = QVBoxLayout(self._main_bottom_panel)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(0)
+        self.workbench_timeline = WorkbenchTimeline(self._translator, self._main_bottom_panel)
+        self.workbench_timeline.view_all_requested.connect(
+            lambda: self._open_history_panel(toggle=True, anchor=QCursor.pos())
+        )
+        self.workbench_timeline.entry_selected.connect(self._on_timeline_entry_selected)
+        bottom_layout.addWidget(self.workbench_timeline, 0)
+        self.input_widget = InputWidget(self._translator, self._main_bottom_panel)
+        bottom_layout.addWidget(self.input_widget, 1)
         self._main_splitter.addWidget(self.output_widget)
-        self._main_splitter.addWidget(self.input_widget)
+        self._main_splitter.addWidget(self._main_bottom_panel)
         self._main_splitter.setStretchFactor(0, 3)
         self._main_splitter.setStretchFactor(1, 1)
         self.input_widget.setMinimumHeight(_dp(80))
         self.output_widget.setMinimumHeight(_dp(120))
+        self._main_bottom_panel.setMinimumHeight(_dp(168))
         self._main_input_on_top = False
         main_root.addWidget(self._main_splitter, 1)
-        self.main_card.set_content(main_container)
+        self.main_card.set_content(self._main_container)
         # Swap button — floating on splitter handle
-        self._swap_btn = QPushButton("⇅", main_container)
-        self._swap_btn.setFixedSize(_dp(32), _dp(16))
+        self._swap_btn = QPushButton("⇅", self._main_container)
+        self._swap_btn.setFixedSize(_dp(28), _dp(16))
         self._swap_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._swap_btn.setToolTip(self._translator.t('swap_layout'))
-        self._swap_btn.setObjectName("SwapButton")
+        self._swap_btn.setObjectName("WorkbenchDividerHandle")
         self._swap_btn.clicked.connect(self._swap_main_sections)
         self._swap_btn.raise_()
+        self._workbench_hint = QLabel("", self._main_container)
+        self._workbench_hint.setObjectName("WorkbenchRightClickHint")
+        self._workbench_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._workbench_hint.hide()
         self._main_splitter.splitterMoved.connect(self._reposition_swap_btn)
-        main_container.resizeEvent = lambda e: self._reposition_swap_btn()
+        self._main_container.resizeEvent = lambda e: self._layout_workbench_overlays()
+        self._apply_main_workbench_style()
         self.workspace.add_card(self.main_card)
         self._register_card_hooks(self.main_card)
         self._label_card(self.main_card, 'widget_main')
@@ -351,27 +446,21 @@ class MainWindow(QWidget):
         self._label_card(self.metadata_destroyer_card, 'widget_metadata_destroyer')
 
         # Destroy template combo in title bar
-        self._destroy_combo = QComboBox(self.metadata_destroyer_card._drag_strip)
+        self._destroy_combo = QComboBox(self.metadata_destroyer_card)
         self._destroy_combo.setFixedHeight(_dp(22))
         self._destroy_combo.setMaximumWidth(_dp(100))
         self._destroy_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self._destroy_combo.currentIndexChanged.connect(self._on_destroy_template_changed)
         self._destroy_combo.installEventFilter(self)
-        self.metadata_destroyer_widget._edit_destroy_preset_requested.connect(
+        self.metadata_destroyer_card.add_title_action_widget(self._destroy_combo)
+        self.metadata_destroyer_widget.edit_destroy_preset_requested.connect(
             lambda: QTimer.singleShot(100, lambda: self._show_destroy_template_menu(QCursor.pos()))
         )
         self._load_destroy_templates()
 
-        # Position combo in destroyer card's resizeEvent
-        _orig_destroyer_resize = self.metadata_destroyer_card.resizeEvent
-        def _destroyer_resized(event):
-            _orig_destroyer_resize(event)
-            self._position_destroy_combo()
-        self.metadata_destroyer_card.resizeEvent = _destroyer_resized
-
         # Image interrogator
         from .widgets.interrogator import InterrogatorWidget
-        self.interrogator_card = WidgetCard('widget-interrogator', min_size=QSize(420, 500), parent=self.workspace)
+        self.interrogator_card = WidgetCard('widget-interrogator', min_size=QSize(620, 520), parent=self.workspace)
         self.interrogator_widget = InterrogatorWidget(
             self._translator, self.interrogator_card,
             model_dir=self._state.settings.tagger_model_dir,
@@ -391,7 +480,11 @@ class MainWindow(QWidget):
         self._history_sidebar = HistorySidebar(self._translator, self._storage, self.workspace)
         self._history_sidebar.hide()
         self._history_sidebar.entry_fill_requested.connect(self._on_history_fill)
+        self._history_sidebar.entry_selected.connect(self._on_history_output_selected)
+        self._history_sidebar.entry_restore_requested.connect(self._restore_history_entry)
+        self._history_sidebar.changed.connect(lambda: self._refresh_workbench_timeline())
         self._history_sidebar.width_changed.connect(lambda _: self._position_history_sidebar())
+        self._history_sidebar.close_requested.connect(self._close_sidebar)
         self._history_sidebar.set_retention_days(self._state.settings.history_retention_days)
 
         self._history_tab_btn = QPushButton("◁", self.workspace)
@@ -409,6 +502,7 @@ class MainWindow(QWidget):
         entries = self._storage.load_history(retention_days=self._state.settings.history_retention_days)
         if entries:
             self._history_sidebar.set_entries(entries)
+        self._refresh_workbench_timeline(entries)
 
         self.main_card.floated.connect(lambda _: self._reparent_right_rail_to_card())
         self.main_card.unfloated.connect(lambda _: self._reparent_right_rail_to_workspace())
@@ -420,7 +514,9 @@ class MainWindow(QWidget):
         self._pending_history_input: str = ""
         self._pending_history_model: str = ""
         self._floating_tray = FloatingTrayWidget(self._translator)
-        self._floating_tray.member_requested.connect(self._restore_from_floating_tray)
+        self._floating_tray.member_requested.connect(self._show_from_floating_tray)
+        self._floating_tray.position_changed.connect(self._schedule_save)
+        self._floating_tray.close_requested.connect(self._close_floating_tray)
 
         self._tag_dictionary = TagDictionary()
         csv_name = 'danbooru_all_2.csv'
@@ -432,13 +528,13 @@ class MainWindow(QWidget):
                 break
         self.output_widget.set_dictionary(self._tag_dictionary)
         self.interrogator_widget.set_tag_dictionary(self._tag_dictionary)
-        self.interrogator_widget.apply_llm_settings(self._state.settings)
+        self.interrogator_widget.apply_interrogator_settings(self._state.settings)
         s_init = self.settings_panel.settings()
         from .logic import normalize_api_base_url
         self.interrogator_widget.set_api_settings(
             normalize_api_base_url(s_init.api_base_url), s_init.api_key, s_init.model
         )
-        self.interrogator_widget._llm_tab.settings_changed.connect(self._on_llm_tagger_settings_changed)
+        self.interrogator_widget.settings_changed.connect(self._on_interrogator_settings_changed)
 
         # Install tag autocomplete on input editor and output editors
         install_completer(self.input_widget.editor, self._tag_dictionary)
@@ -451,6 +547,7 @@ class MainWindow(QWidget):
         self.input_widget.send_requested.connect(self._handle_send_action)
         self.input_widget.summary_button.clicked.connect(self._handle_summary_action)
         self.input_widget.editor.textChanged.connect(self._on_editor_changed)
+        self.output_widget.changed.connect(self._on_output_widget_changed)
 
         # Hint manager (feature discoverability framework)
         from .widgets.hint_manager import HintManager
@@ -493,6 +590,7 @@ class MainWindow(QWidget):
 
         self.input_widget.editor.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.input_widget.editor.customContextMenuRequested.connect(self._show_input_menu)
+        install_localized_context_menus(self, self._translator)
 
     def _set_button_active(self, button: QPushButton, active: bool) -> None:
         button.setProperty('active', active)
@@ -692,18 +790,72 @@ class MainWindow(QWidget):
         )
         self._swap_btn.raise_()
 
+    def _layout_workbench_overlays(self) -> None:
+        self._reposition_swap_btn()
+        if hasattr(self, "_workbench_hint") and self._workbench_hint.isVisible():
+            self._workbench_hint.adjustSize()
+            parent = self._workbench_hint.parentWidget()
+            if parent is not None:
+                self._workbench_hint.move(
+                    max(0, parent.width() - self._workbench_hint.width() - _dp(8)),
+                    max(0, parent.height() - self._workbench_hint.height() - _dp(8)),
+                )
+                self._workbench_hint.raise_()
+
+    def _apply_main_workbench_style(self) -> None:
+        pal = current_palette()
+        if hasattr(self, "main_card") and self.main_card is not None:
+            self.main_card.setStyleSheet(
+                f"#WidgetCard {{ background: {pal['bg_card']}; border: 1px solid {pal['line_hover']}; border-radius: {_dp(4)}px; }}"
+                f"#WidgetCard:hover {{ border-color: {pal['line_strong']}; }}"
+                f"#WidgetDragStrip {{ background: {pal['bg_card_strip']}; border-top-left-radius: {_dp(4)}px; border-top-right-radius: {_dp(4)}px; border-bottom: 1px solid {pal['line']}; }}"
+                f"#WidgetDragStrip:hover {{ background: {pal['bg_card_strip_hover']}; }}"
+                f"QPushButton#WidgetGrip {{ color: {pal['text_dim']}; background: transparent; border: none; border-radius: {_dp(3)}px; font-size: {_fs('fs_13')}; }}"
+                f"QPushButton#WidgetGrip:hover {{ background: {pal['hover_bg_strong']}; color: {pal['text_muted']}; }}"
+                f"QPushButton#WidgetCloseBtn, QPushButton#WidgetPinBtn {{ background: transparent; border: none; color: {pal['text_muted']}; border-radius: {_dp(3)}px; font-size: {_fs('fs_12')}; }}"
+                f"QPushButton#WidgetCloseBtn:hover, QPushButton#WidgetPinBtn:hover {{ background: {pal['hover_bg_strong']}; color: {pal['text']}; }}"
+                f"QPushButton#WidgetResizeHandle {{ color: {pal['text_label']}; background: transparent; border: none; font-size: {_fs('fs_9')}; }}"
+            )
+        if hasattr(self, "_main_container") and self._main_container is not None:
+            self._main_container.setStyleSheet(
+                f"QWidget#WorkbenchMainContainer {{ background: {pal['bg_card_strip']}; }}"
+                f"QWidget#WorkbenchBottomPanel {{ background: {pal['bg_card_strip']}; }}"
+                f"QSplitter#WorkbenchMainSplitter {{ background: {pal['bg_card_strip']}; }}"
+                f"QSplitter#WorkbenchMainSplitter::handle:vertical {{ background: {pal['line']}; height: {_dp(1)}px; margin: {_dp(4)}px {_dp(16)}px; }}"
+                f"QPushButton#WorkbenchDividerHandle {{ background: {pal['bg_surface']}; color: {pal['text_muted']}; border: 1px solid {pal['line_hover']}; border-radius: {_dp(8)}px; font-size: {_fs('fs_10')}; padding: 0px; }}"
+                f"QPushButton#WorkbenchDividerHandle:hover {{ background: {pal['hover_bg_strong']}; color: {pal['text']}; }}"
+                f"QLabel#WorkbenchRightClickHint {{ color: {pal['text_label']}; background: transparent; font-size: {_fs('fs_9')}; font-style: italic; }}"
+            )
+        if hasattr(self, "_main_splitter") and self._main_splitter is not None:
+            self._main_splitter.setHandleWidth(_dp(1))
+        if hasattr(self, "input_widget") and self.input_widget is not None:
+            self.input_widget.setMinimumHeight(_dp(80))
+        if hasattr(self, "output_widget") and self.output_widget is not None:
+            self.output_widget.setMinimumHeight(_dp(120))
+        if hasattr(self, "_main_bottom_panel") and self._main_bottom_panel is not None:
+            self._main_bottom_panel.setMinimumHeight(_dp(168))
+        if hasattr(self, "_swap_btn") and self._swap_btn is not None:
+            self._swap_btn.setFixedSize(_dp(28), _dp(16))
+        if hasattr(self, "_destroy_combo") and self._destroy_combo is not None:
+            self._destroy_combo.setFixedHeight(_dp(22))
+            self._destroy_combo.setMaximumWidth(_dp(100))
+        if hasattr(self, "_lib_tab_btn") and self._lib_tab_btn is not None:
+            self._lib_tab_btn.setFixedSize(_dp(18), _dp(64))
+        if hasattr(self, "_history_tab_btn") and self._history_tab_btn is not None:
+            self._history_tab_btn.setFixedSize(_dp(18), _dp(64))
+
     def _swap_main_sections(self) -> None:
         sizes = self._main_splitter.sizes()
         self._main_input_on_top = not self._main_input_on_top
         # Remove and re-add in swapped order
         self.output_widget.setParent(None)
-        self.input_widget.setParent(None)
+        self._main_bottom_panel.setParent(None)
         if self._main_input_on_top:
-            self._main_splitter.addWidget(self.input_widget)
+            self._main_splitter.addWidget(self._main_bottom_panel)
             self._main_splitter.addWidget(self.output_widget)
         else:
             self._main_splitter.addWidget(self.output_widget)
-            self._main_splitter.addWidget(self.input_widget)
+            self._main_splitter.addWidget(self._main_bottom_panel)
         self._main_splitter.setSizes(list(reversed(sizes)))
         self._schedule_save()
 
@@ -741,6 +893,7 @@ class MainWindow(QWidget):
 
     def _register_card_hooks(self, card: WidgetCard) -> None:
         card.interaction_finished.connect(self._on_card_interaction_finished)
+        card.geometry_live.connect(lambda widget_id=card.widget_id: self._schedule_floating_tray_check(widget_id))
 
     def _create_example_card(
         self,
@@ -769,6 +922,8 @@ class MainWindow(QWidget):
             self._translator.t('tip_close_card'),
             self._translator.t('pin_on'),
             self._translator.t('pin_off'),
+            self._translator.t('widget_return_workspace'),
+            self._translator.t('widget_stow'),
         )
         if state is not None:
             card.setGeometry(state.x, state.y, state.width, state.height)
@@ -814,88 +969,270 @@ class MainWindow(QWidget):
             height=geometry.height(),
         )
 
-    def _visible_floating_cards(self) -> list[WidgetCard]:
+    def _visible_tray_candidate_cards(self) -> list[WidgetCard]:
         return [
             card for card in self.workspace.all_cards()
-            if getattr(card, "_floating", False) and card.isVisible()
+            if card.isVisible()
+            and card.widget_id not in _FLOATING_TRAY_PROTECTED_WIDGET_IDS
         ]
 
+    def _card_screen_rect(self, card: WidgetCard) -> QRect:
+        return QRect(card.mapToGlobal(QPoint(0, 0)), card.size())
+
     def _cards_overlap_or_near(self, left: WidgetCard, right: WidgetCard, margin: int = 48) -> bool:
-        left_rect = left.frameGeometry()
-        right_rect = right.frameGeometry()
+        left_rect = self._card_screen_rect(left)
+        right_rect = self._card_screen_rect(right)
         if left_rect.intersects(right_rect):
             return True
         return left_rect.adjusted(-margin, -margin, margin, margin).intersects(right_rect)
 
-    def _tray_anchor_point(self, cards: list[WidgetCard]) -> QPoint:
+    def _tray_anchor_point(self, cards: list[WidgetCard], release_pos: QPoint | None = None) -> QPoint:
         if not cards:
             return QPoint(120, 120)
-        center_x = sum(card.frameGeometry().center().x() for card in cards) // len(cards)
-        center_y = sum(card.frameGeometry().center().y() for card in cards) // len(cards)
-        return QPoint(center_x, center_y)
+        rects = [self._card_screen_rect(card) for card in cards]
+        group = QRect(rects[0])
+        for rect in rects[1:]:
+            group = group.united(rect)
+        if release_pos is not None and group.adjusted(-_dp(120), -_dp(120), _dp(120), _dp(120)).contains(release_pos):
+            return release_pos + QPoint(_dp(14), _dp(12))
+        return QPoint(group.right() + _dp(10), group.top())
 
-    def _store_card_in_tray(self, card: WidgetCard) -> None:
+    def _store_card_in_tray(self, card: WidgetCard) -> bool:
+        if card.widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
+            return False
+        snapshot = self._floating_card_snapshot(card)
         if self._floating_tray.has_member(card.widget_id):
-            self._floating_tray.update_member(self._floating_card_snapshot(card))
+            self._floating_tray.update_member(snapshot)
         else:
-            self._floating_tray.add_member(self._floating_card_snapshot(card))
-        card.hide()
+            self._floating_tray.add_member(snapshot)
+        if getattr(card, "_floating", False) and getattr(card, "_workspace_parent", None):
+            card.float_back(card._workspace_parent, show=False)
+        else:
+            card.hide()
+        if card is self.main_card:
+            self._close_sidebar()
+        self._refresh_dock_items()
+        self._on_main_card_visibility_changed()
+        return True
 
-    def _restore_from_floating_tray(self, widget_id: str) -> None:
+    def _show_from_floating_tray(self, widget_id: str) -> None:
+        shown = self._show_tray_member_near_tray(widget_id)
+        if not shown:
+            return
+        self._sync_floating_tray(auto_restore_single=False)
+        self._schedule_save()
+
+    def _close_floating_tray(self) -> None:
+        """Dismiss the tray and expose its members back in the Dock restore list."""
+        if not self._floating_tray.member_ids():
+            self._floating_tray.hide()
+            return
+        self._floating_tray.clear_members()
+        self._floating_tray.hide()
+        self._refresh_dock_items()
+        self._schedule_save()
+
+    def _restore_tray_member(self, widget_id: str) -> bool:
         member = self._floating_tray.remove_member(widget_id)
         card = self.workspace.card(widget_id)
         if member is None or card is None:
-            return
+            return False
+        target = self._visible_floating_rect(QRect(member.x, member.y, member.width, member.height))
         if not getattr(card, "_floating", False):
-            card.float_out(QPoint(member.x + member.width // 2, member.y + 16))
-        card.setGeometry(member.x, member.y, member.width, member.height)
+            card.float_out(QPoint(target.x() + target.width() // 2, target.y() + 16))
+        card.setGeometry(target)
         card.show()
         card.raise_()
-        if not self._floating_tray.member_ids():
+        if widget_id == 'widget-main':
+            self._on_main_card_visibility_changed()
+        return True
+
+    def _tray_adjacent_rect(self, member: FloatingTrayMemberState, card: WidgetCard) -> QRect:
+        tray_rect = self._floating_tray.frameGeometry()
+        screen = QGuiApplication.screenAt(tray_rect.center()) or QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else QRect(0, 0, 1280, 800)
+        gap = _dp(10)
+        width = max(card.minimumWidth(), member.width, _dp(280))
+        height = max(card.minimumHeight(), member.height, _dp(180))
+        width = min(width, max(_dp(220), available.width() - gap * 2))
+        height = min(height, max(_dp(160), available.height() - gap * 2))
+        right_x = tray_rect.right() + gap
+        left_x = tray_rect.left() - gap - width
+        if right_x + width <= available.right():
+            x = right_x
+        elif left_x >= available.left():
+            x = left_x
+        else:
+            x = max(available.left(), min(tray_rect.left(), available.right() - width))
+        y = max(available.top(), min(tray_rect.top(), available.bottom() - height))
+        return QRect(x, y, width, height)
+
+    def _show_tray_member_near_tray(self, widget_id: str) -> bool:
+        member = self._floating_tray.member_state(widget_id)
+        card = self.workspace.card(widget_id)
+        if member is None or card is None:
+            return False
+        if not self._floating_tray.isVisible():
+            self._sync_floating_tray(auto_restore_single=False)
+        target = self._tray_adjacent_rect(member, card)
+        if not getattr(card, "_floating", False):
+            card.float_out(QPoint(target.x() + target.width() // 2, target.y() + _dp(16)))
+        card.setGeometry(target)
+        card.show()
+        card.raise_()
+        self._floating_tray.set_active_member(widget_id)
+        self._floating_tray.update_member(self._floating_card_snapshot(card))
+        if widget_id == 'widget-main':
+            self._on_main_card_visibility_changed()
+        self._refresh_dock_items()
+        return True
+
+    def _restore_lonely_tray_member(self, widget_id: str) -> bool:
+        member = self._floating_tray.member_state(widget_id)
+        card = self.workspace.card(widget_id)
+        if member is None or card is None:
+            self._floating_tray.remove_member(widget_id)
             self._floating_tray.hide()
-        self._schedule_save()
+            return False
+        if self._floating_tray.isVisible():
+            target = self._tray_adjacent_rect(member, card)
+        else:
+            target = self._visible_floating_rect(QRect(member.x, member.y, member.width, member.height))
+        self._floating_tray.remove_member(widget_id)
+        if not getattr(card, "_floating", False):
+            card.float_out(QPoint(target.x() + target.width() // 2, target.y() + _dp(16)))
+        card.setGeometry(target)
+        card.show()
+        card.raise_()
+        if widget_id == 'widget-main':
+            self._on_main_card_visibility_changed()
+        self._refresh_dock_items()
+        return True
+
+    def _sync_floating_tray(self, *, auto_restore_single: bool = False) -> None:
+        member_ids = self._floating_tray.member_ids()
+        if len(member_ids) == 1:
+            self._restore_lonely_tray_member(member_ids[0])
+            member_ids = self._floating_tray.member_ids()
+        if len(member_ids) > 1:
+            self._floating_tray.show()
+            self._floating_tray.ensure_visible()
+            self._floating_tray.raise_()
+        else:
+            self._floating_tray.hide()
 
     def _restore_floating_tray_state(self) -> None:
-        state = self._state.floating_tray
-        if not state.visible or not state.members:
+        if self._floating_tray.member_ids():
+            self._sync_floating_tray(auto_restore_single=False)
+            self._refresh_dock_items()
+            self._on_main_card_visibility_changed()
             return
-        for member in state.members:
-            card = self.workspace.card(member.widget_id)
-            if card is None:
-                continue
-            if not getattr(card, "_floating", False):
-                card.float_out(QPoint(member.x + member.width // 2, member.y + 16))
-            card.setGeometry(member.x, member.y, member.width, member.height)
-            self._store_card_in_tray(card)
-        self._floating_tray.set_labels(self._card_labels)
-        self._floating_tray.restore_state(state)
+        state = self._state.floating_tray
+        if state.visible and state.members:
+            self._floating_tray.clear_members()
+            self._floating_tray.move(QPoint(state.x, state.y))
+            for member in state.members:
+                if not member.widget_id:
+                    continue
+                card = self.workspace.card(member.widget_id)
+                if card is None:
+                    continue
+                target = self._visible_floating_rect(QRect(member.x, member.y, member.width, member.height))
+                if member.widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
+                    if not getattr(card, "_floating", False):
+                        card.float_out(QPoint(target.x() + target.width() // 2, target.y() + _dp(16)))
+                    card.setGeometry(target)
+                    card.show()
+                    continue
+                if not getattr(card, "_floating", False):
+                    card.float_out(QPoint(target.x() + target.width() // 2, target.y() + _dp(16)))
+                card.setGeometry(target)
+                card.show()
+                self._store_card_in_tray(card)
+            self._floating_tray.set_labels(self._card_labels)
+            self._sync_floating_tray(auto_restore_single=False)
+        else:
+            self._floating_tray.restore_state(
+                FloatingTrayState(visible=False, x=state.x, y=state.y, members=[])
+            )
+        self._refresh_dock_items()
+        self._on_main_card_visibility_changed()
 
     def _on_card_interaction_finished(self, widget_id: str) -> None:
         card = self.workspace.card(widget_id)
-        if card is None or not getattr(card, "_floating", False) or not card.isVisible():
+        if card is None or not card.isVisible():
+            return
+        if widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
             return
 
         tray_rect = self._floating_tray.frameGeometry() if self._floating_tray.isVisible() else None
-        if tray_rect is not None and tray_rect.adjusted(-24, -24, 24, 24).intersects(card.frameGeometry()):
-            self._store_card_in_tray(card)
-            self._floating_tray.move(self._floating_tray.pos())
+        if tray_rect is not None and tray_rect.adjusted(-24, -24, 24, 24).intersects(self._card_screen_rect(card)):
+            if not self._store_card_in_tray(card):
+                return
+            self._sync_floating_tray(auto_restore_single=False)
             self._schedule_save()
             return
 
-        nearby = [other for other in self._visible_floating_cards() if other is not card and self._cards_overlap_or_near(card, other)]
+        nearby = [
+            other for other in self._visible_tray_candidate_cards()
+            if other is not card and self._cards_overlap_or_near(card, other)
+        ]
         if not nearby:
             return
 
-        members = [card, *nearby]
-        anchor = self._tray_anchor_point(members)
-        self._floating_tray.move(anchor)
-        self._floating_tray.set_labels(self._card_labels)
-        self._floating_tray.retranslate_ui()
-        for member in members:
-            self._store_card_in_tray(member)
-        self._floating_tray.show()
-        self._floating_tray.raise_()
+        members = [
+            member for member in [card, *nearby]
+            if member.widget_id not in _FLOATING_TRAY_PROTECTED_WIDGET_IDS
+        ]
+        if len(members) < 2:
+            return
+        anchor = self._tray_anchor_point(members, QCursor.pos())
+        if not self._floating_tray.isVisible():
+            self._floating_tray.hide()
+        self._floating_tray.begin_batch_update()
+        try:
+            self._floating_tray.move(anchor)
+            self._floating_tray.set_labels(self._card_labels)
+            self._floating_tray.retranslate_ui()
+            for member in members:
+                self._store_card_in_tray(member)
+        finally:
+            self._floating_tray.end_batch_update()
+        self._sync_floating_tray(auto_restore_single=False)
         self._schedule_save()
+
+    def _schedule_floating_tray_check(self, widget_id: str) -> None:
+        card = self.workspace.card(widget_id)
+        if card is None or not card.isVisible():
+            return
+        if widget_id in self._floating_tray_check_pending:
+            return
+        self._floating_tray_check_pending.add(widget_id)
+        QTimer.singleShot(90, lambda widget_id=widget_id: self._run_floating_tray_check(widget_id))
+
+    def _run_floating_tray_check(self, widget_id: str) -> None:
+        card = self.workspace.card(widget_id)
+        if card is None or not card.isVisible():
+            self._floating_tray_check_pending.discard(widget_id)
+            return
+        if getattr(card, "_dragging", False) or getattr(card, "_resizing", False):
+            if QApplication.mouseButtons() & Qt.MouseButton.LeftButton:
+                QTimer.singleShot(90, lambda widget_id=widget_id: self._run_floating_tray_check(widget_id))
+                return
+            card._dragging = False
+            card._resizing = False
+        self._floating_tray_check_pending.discard(widget_id)
+        if card.isVisible():
+            self._on_card_interaction_finished(widget_id)
+
+    def _visible_floating_rect(self, rect: QRect) -> QRect:
+        target = QRect(rect)
+        screen = QGuiApplication.screenAt(target.center()) or QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else QRect(0, 0, 1280, 800)
+        grab = _dp(48)
+        target.moveLeft(max(available.left() - target.width() + grab, min(target.x(), available.right() - grab)))
+        target.moveTop(max(available.top(), min(target.y(), available.bottom() - grab)))
+        return target
 
     def _dock_query(self) -> DockQueryResult | None:
         if not self.dock_panel.isVisible():
@@ -905,15 +1242,21 @@ class MainWindow(QWidget):
     def _dock_card(self, widget_id: str) -> None:
         if self._floating_tray.has_member(widget_id):
             self._floating_tray.remove_member(widget_id)
+            self._sync_floating_tray(auto_restore_single=False)
+        card = self.workspace.card(widget_id)
+        if card is not None and getattr(card, "_floating", False) and getattr(card, "_workspace_parent", None):
+            card.float_back(card._workspace_parent)
         self.workspace.hide_card(widget_id)
         if widget_id == 'widget-main':
             self._on_main_card_visibility_changed()
+        if not self._floating_tray.should_show():
+            self._floating_tray.hide()
         self._refresh_dock_items()
         self._schedule_save()
 
     def _restore_card(self, widget_id: str, global_pos: QPoint | None) -> None:
         if self._floating_tray.has_member(widget_id):
-            self._restore_from_floating_tray(widget_id)
+            self._show_from_floating_tray(widget_id)
             return
         card = self.workspace.card(widget_id)
         if card is None:
@@ -978,6 +1321,25 @@ class MainWindow(QWidget):
 
     def _collect_widget_states(self) -> list[WidgetState]:
         states = self.workspace.widget_states()
+        tray_members = {
+            member.widget_id: member
+            for member in self._floating_tray.member_states()
+            if member.widget_id in _FLOATING_TRAY_RESTORE_ON_PERSIST_WIDGET_IDS
+        }
+        for index, state in enumerate(states):
+            member = tray_members.get(state.widget_id)
+            if member is None:
+                continue
+            states[index] = WidgetState(
+                widget_id=state.widget_id,
+                visible=True,
+                docked=False,
+                x=member.x,
+                y=member.y,
+                width=member.width,
+                height=member.height,
+                dock_slot="",
+            )
         states.sort(key=lambda item: item.widget_id)
         return states
 
@@ -989,29 +1351,7 @@ class MainWindow(QWidget):
     def _build_app_state(self) -> AppState:
         settings = self.settings_panel.settings()
         settings.language = self._translator.get_language()
-        # Preserve state-only fields not managed by settings panel
-        settings.theme = self._state.settings.theme
-        settings.card_opacity = self._state.settings.card_opacity
-        settings.custom_bg_image = self._state.settings.custom_bg_image
-        settings.bg_blur = self._state.settings.bg_blur
-        settings.bg_opacity = self._state.settings.bg_opacity
-        settings.bg_brightness = self._state.settings.bg_brightness
-        settings.workspace_menu_order = self._state.settings.workspace_menu_order
-        settings.image_manager_folder = self._state.settings.image_manager_folder
-        settings.send_mode = self._state.settings.send_mode
-        settings.history_retention_days = self._state.settings.history_retention_days
-        settings.library_last_section = self._state.settings.library_last_section
-        settings.skipped_version = self._state.settings.skipped_version
-        settings.destroy_templates = self._state.settings.destroy_templates
-        settings.active_destroy_template = self._state.settings.active_destroy_template
-        settings.tagger_model_dir = self._state.settings.tagger_model_dir
-        settings.tagger_python_path = self._state.settings.tagger_python_path
-        settings.tagger_llm_use_separate = self._state.settings.tagger_llm_use_separate
-        settings.tagger_llm_base_url = self._state.settings.tagger_llm_base_url
-        settings.tagger_llm_api_key = self._state.settings.tagger_llm_api_key
-        settings.tagger_llm_model = self._state.settings.tagger_llm_model
-        settings.tagger_llm_presets = self._state.settings.tagger_llm_presets
-        settings.tagger_llm_active_preset = self._state.settings.tagger_llm_active_preset
+        self._preserve_state_only_settings(settings)
         window_geometry = self._base_window_geometry()
         available = self._current_available_geometry()
         self._state.settings = settings
@@ -1035,6 +1375,13 @@ class MainWindow(QWidget):
         self._state.input_history = self.input_widget.text()
         self._state.floating_tray = self._floating_tray.tray_state()
         return self._state
+
+    def _preserve_state_only_settings(self, settings: AppSettings) -> None:
+        """Keep widget-owned settings when the settings panel rebuilds AppSettings."""
+        current = self._state.settings
+        for field_name in self._STATE_ONLY_SETTINGS_FIELDS:
+            if hasattr(settings, field_name) and hasattr(current, field_name):
+                setattr(settings, field_name, getattr(current, field_name))
 
     def _persist_state(self) -> None:
         try:
@@ -1108,6 +1455,13 @@ class MainWindow(QWidget):
         for image_path in obsolete_example_paths:
             self._storage.remove_example_image(image_path)
         self._load_state_into_ui()
+        if self._state.settings.theme == "custom" and self._state.settings.custom_bg_image:
+            from .theme import extract_palette_from_image
+            self._custom_palette = extract_palette_from_image(self._state.settings.custom_bg_image)
+        else:
+            self._custom_palette = None
+        self._apply_background_image()
+        self._apply_appearance()
         self._restore_window_geometry()
         self._apply_pinned_state(state.window.pinned)
         self._apply_shell_layout()
@@ -1133,7 +1487,9 @@ class MainWindow(QWidget):
         self._state.settings.history_retention_days = s.history_retention_days
         self._library_panel.set_oc_defaults(s.default_oc_order, s.default_oc_depth)
         self._history_sidebar.set_retention_days(s.history_retention_days)
-        self._history_sidebar.set_entries(self._storage.load_history(retention_days=s.history_retention_days))
+        history_entries = self._storage.load_history(retention_days=s.history_retention_days)
+        self._history_sidebar.set_entries(history_entries)
+        self._refresh_workbench_timeline(history_entries)
         self.input_widget.set_send_mode(self._state.settings.send_mode)
         from .logic import normalize_api_base_url
         self.interrogator_widget.set_api_settings(
@@ -1142,10 +1498,10 @@ class MainWindow(QWidget):
         self._update_token_estimate()
         self._schedule_save()
 
-    def _on_llm_tagger_settings_changed(self) -> None:
-        llm_settings = self.interrogator_widget.collect_llm_settings()
+    def _on_interrogator_settings_changed(self) -> None:
+        interrogator_settings = self.interrogator_widget.collect_interrogator_settings()
         s = self._state.settings
-        for key, value in llm_settings.items():
+        for key, value in interrogator_settings.items():
             if hasattr(s, key):
                 setattr(s, key, value)
         self._schedule_save()
@@ -1210,6 +1566,9 @@ class MainWindow(QWidget):
         self._set_settings_open(not self.settings_panel.is_open())
 
     def _handle_escape(self) -> None:
+        if self._right_sidebar_mode:
+            self._close_sidebar()
+            return
         if self.settings_panel.is_open():
             self._set_settings_open(False)
 
@@ -1372,6 +1731,7 @@ class MainWindow(QWidget):
 
     def _show_workspace_menu(self, pos: QPoint) -> None:
         menu = QMenu(self)
+        apply_app_menu_style(menu)
         items = self._workspace_menu_items()
         actions: dict[object, callable] = {}
         for item_id in self._workspace_menu_order():
@@ -1379,6 +1739,7 @@ class MainWindow(QWidget):
                 menu.addSeparator()
             elif item_id == 'appearance':
                 sub = menu.addMenu(self._translator.t('appearance'))
+                apply_app_menu_style(sub)
                 self._build_appearance_menu(sub)
             elif item_id in items:
                 label, handler = items[item_id]
@@ -1397,6 +1758,7 @@ class MainWindow(QWidget):
         for card in list(self.workspace.all_cards()):
             if card.isVisible():
                 self.workspace.hide_card(card.widget_id)
+        self._close_floating_tray()
         self._refresh_dock_items()
         self._schedule_save()
 
@@ -1431,7 +1793,7 @@ class MainWindow(QWidget):
 
         def _make_item(item_id: str, checked: bool) -> None:
             if item_id == '---':
-                li = QListWidgetItem('── 分隔线 ──')
+                li = QListWidgetItem(self._translator.t('separator_item'))
             elif item_id == 'appearance':
                 li = QListWidgetItem(self._translator.t('appearance'))
             elif item_id in items:
@@ -1485,6 +1847,7 @@ class MainWindow(QWidget):
         settings = self.settings_panel.settings()
 
         theme_menu = menu.addMenu(self._translator.t('theme'))
+        apply_app_menu_style(theme_menu)
         for theme_id, label_key in [('dark', 'theme_dark'), ('light', 'theme_light')]:
             action = theme_menu.addAction(self._translator.t(label_key))
             action.setCheckable(True)
@@ -1500,6 +1863,7 @@ class MainWindow(QWidget):
         bg_settings_action.triggered.connect(self._show_bg_settings_panel)
 
         opacity_menu = menu.addMenu(self._translator.t('card_opacity'))
+        apply_app_menu_style(opacity_menu)
         presets_opacity = (50, 65, 82, 90, 100)
         current_opacity = self._state.settings.card_opacity
         current_is_opacity_preset = current_opacity in presets_opacity
@@ -1518,6 +1882,7 @@ class MainWindow(QWidget):
         custom_opacity_action.triggered.connect(self._input_custom_card_opacity)
 
         size_menu = menu.addMenu(self._translator.t('ui_scale'))
+        apply_app_menu_style(size_menu)
         presets = (90, 100, 110, 125, 140, 160)
         current_is_preset = settings.ui_scale_percent in presets
         for percent in presets:
@@ -1535,6 +1900,7 @@ class MainWindow(QWidget):
         custom_scale_action.triggered.connect(self._input_custom_ui_scale)
 
         font_size_menu = menu.addMenu(self._translator.t('font_size'))
+        apply_app_menu_style(font_size_menu)
         pt_presets = (10, 11, 12, 13, 14)
         current_pt_is_preset = settings.body_font_point_size in pt_presets
         for pt in pt_presets:
@@ -1552,6 +1918,7 @@ class MainWindow(QWidget):
         custom_pt_action.triggered.connect(self._input_custom_font_size)
 
         font_menu = menu.addMenu(self._translator.t('font_style'))
+        apply_app_menu_style(font_menu)
         for profile_id, label_key in [
             ('default', 'font_default'),
             ('wenkai', 'font_wenkai'),
@@ -1580,7 +1947,7 @@ class MainWindow(QWidget):
         menu.addAction(self._translator.t('reset_appearance')).triggered.connect(self._reset_appearance)
 
     def _set_custom_bg(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('custom_bg'), '', 'Images (*.png *.jpg *.jpeg *.webp *.bmp)')
+        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('custom_bg'), '', image_filter(self._translator))
         if not path:
             return
         from .theme import extract_palette_from_image
@@ -1773,11 +2140,15 @@ class MainWindow(QWidget):
         setattr(self._state.settings, attr, value)
         self._bg_apply_timer.timeout.disconnect() if self._bg_apply_timer.receivers(self._bg_apply_timer.timeout) > 0 else None
         if attr == 'bg_brightness':
-            self._bg_apply_timer.timeout.connect(self._apply_appearance)
+            self._bg_apply_timer.timeout.connect(self._apply_background_and_appearance)
         else:
             self._bg_apply_timer.timeout.connect(self._apply_background_image)
         self._bg_apply_timer.start()
         self._schedule_save()
+
+    def _apply_background_and_appearance(self) -> None:
+        self._apply_background_image()
+        self._apply_appearance()
 
     def _set_bg_param(self, attr: str, value: int) -> None:
         setattr(self._state.settings, attr, value)
@@ -1831,7 +2202,7 @@ class MainWindow(QWidget):
         self._apply_appearance()
 
     def _import_font(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('import_ttf'), '', 'TrueType Font (*.ttf)')
+        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('import_ttf'), '', ttf_filter(self._translator))
         if not path:
             return
         from PyQt6.QtGui import QFontDatabase
@@ -1855,6 +2226,7 @@ class MainWindow(QWidget):
         if app is None:
             return
         from .theme import generate_qss, scale_qss
+        from .ui_tokens import set_app_ui_scale
         theme = self._state.settings.theme or 'dark'
         opacity = self._state.settings.card_opacity
         brightness = self._state.settings.bg_brightness
@@ -1866,6 +2238,7 @@ class MainWindow(QWidget):
         else:
             ff_list = FONT_PROFILES.get(settings.font_profile, FONT_PROFILES['default'])
         font_family_css = ', '.join(f'"{f}"' for f in ff_list) + ', sans-serif'
+        set_app_ui_scale(settings.ui_scale_percent)
         app.setStyleSheet(scale_qss(generate_qss(
             theme, custom_palette=self._custom_palette, card_opacity=opacity,
             brightness=brightness, body_font_pt=settings.body_font_point_size,
@@ -1877,6 +2250,10 @@ class MainWindow(QWidget):
             self._image_manager.apply_theme()
         if hasattr(self, '_history_sidebar') and self._history_sidebar is not None:
             self._history_sidebar.apply_theme()
+        if hasattr(self, '_library_panel') and self._library_panel is not None:
+            self._library_panel.apply_theme()
+        if hasattr(self, '_floating_tray') and self._floating_tray is not None:
+            self._floating_tray.apply_theme()
         if hasattr(self, 'dock_panel') and self.dock_panel is not None:
             self.dock_panel.apply_theme()
         if hasattr(self, 'interrogator_widget') and self.interrogator_widget is not None:
@@ -1886,12 +2263,20 @@ class MainWindow(QWidget):
             card.apply_theme()
         # Refresh tag category highlighter colors
         self.output_widget.refresh_highlighter()
+        self.output_widget.apply_workbench_style()
+        self._apply_main_workbench_style()
+        self.input_widget.apply_workbench_style()
+        if hasattr(self, 'workbench_timeline') and self.workbench_timeline is not None:
+            self.workbench_timeline.apply_workbench_style()
+        if hasattr(self, '_workbench_oc_strip') and self._workbench_oc_strip is not None:
+            self._workbench_oc_strip.apply_style()
         self._schedule_save()
 
     # ── Dock menu ──
 
     def _show_dock_menu(self, pos: QPoint) -> None:
         menu = QMenu(self)
+        apply_app_menu_style(menu)
         add_example_action = menu.addAction(self._translator.t('add_example'))
         viewer_action = menu.addAction(self._translator.t('metadata_viewer'))
         destroyer_action = menu.addAction(self._translator.t('metadata_destroyer'))
@@ -1907,25 +2292,22 @@ class MainWindow(QWidget):
             self._open_image_manager()
 
     def _show_input_menu(self, pos: QPoint) -> None:
-        menu = self.input_widget.editor.createStandardContextMenu()
+        editor = self.input_widget.editor
+        menu = QMenu(self)
+        apply_app_menu_style(menu)
+        edit_actions = add_text_edit_actions(menu, editor, self._translator)
         menu.addSeparator()
         send_action = QAction(self._translator.t('stop') if self._worker is not None and self._worker.isRunning() else self._translator.t('send'), menu)
         summary_action = QAction(self._translator.t('summary'), menu)
-        clear_action = QAction(self._translator.t('clear_history'), menu)
+        clear_action = QAction(self._translator.t('clear_input'), menu)
         clear_memory_action = QAction(self._translator.t('clear_memory'), menu)
-        first_standard = menu.actions()[0] if menu.actions() else None
-        if first_standard is not None:
-            menu.insertAction(first_standard, clear_action)
-            menu.insertAction(clear_action, clear_memory_action)
-            menu.insertAction(clear_memory_action, summary_action)
-            menu.insertAction(summary_action, send_action)
-            menu.insertSeparator(send_action)
-        else:
-            menu.addAction(send_action)
-            menu.addAction(summary_action)
-            menu.addAction(clear_action)
-            menu.addAction(clear_memory_action)
-        chosen = menu.exec(self.input_widget.editor.mapToGlobal(pos))
+        menu.addAction(send_action)
+        menu.addAction(summary_action)
+        menu.addAction(clear_action)
+        menu.addAction(clear_memory_action)
+        chosen = menu.exec(editor.mapToGlobal(pos))
+        if handle_text_edit_action(chosen, edit_actions, editor):
+            return
         if chosen is send_action:
             self._handle_send_action()
         elif chosen is summary_action:
@@ -1934,6 +2316,177 @@ class MainWindow(QWidget):
             self._clear_input_history()
         elif chosen is clear_memory_action:
             self._clear_conversation_history()
+
+    def _show_workbench_menu(self, pos: QPoint) -> None:
+        global_pos = self._main_container.mapToGlobal(pos)
+        menu = QMenu(self)
+        add_oc_menu = menu.addMenu(self._translator.t("workbench_add_oc"))
+        self._style_workbench_menu(add_oc_menu)
+        self._populate_oc_add_menu(add_oc_menu, anchor=global_pos)
+        add_artist_action = menu.addAction(self._translator.t("workbench_add_artist"))
+        open_artist_action = menu.addAction(self._translator.t("workbench_open_artist_library"))
+        menu.addSeparator()
+        regenerate_action = menu.addAction(self._translator.t("workbench_regenerate"))
+        pin_action = menu.addAction(self._translator.t("workbench_pin_current"))
+        copy_action = menu.addAction(self._translator.t("workbench_copy_all_tags"))
+        history_action = menu.addAction(self._translator.t("workbench_view_history"))
+        menu.addSeparator()
+        new_workbench_action = menu.addAction(self._translator.t("workbench_new"))
+        settings_action = menu.addAction(self._translator.t("workbench_settings"))
+        self._style_workbench_menu(menu)
+        chosen = menu.exec(global_pos)
+        if chosen is add_artist_action:
+            self._library_panel.add_artist_entry()
+            self._open_library_section("artist", toggle=False, anchor=global_pos)
+        elif chosen is open_artist_action:
+            self._open_library_section("artist", toggle=True, anchor=global_pos)
+        elif chosen is copy_action:
+            self._copy_all_workbench_tags()
+        elif chosen is regenerate_action:
+            self._handle_regenerate_action()
+        elif chosen is pin_action:
+            self.main_card.toggle_pin()
+            self._schedule_save()
+        elif chosen is history_action:
+            self._open_history_panel(toggle=True, anchor=global_pos)
+        elif chosen is new_workbench_action:
+            self._new_workbench_session()
+        elif chosen is settings_action:
+            self._set_settings_open(True)
+
+    def _show_oc_add_menu(self, global_pos: QPoint) -> None:
+        menu = QMenu(self)
+        self._populate_oc_add_menu(menu, anchor=global_pos)
+        self._style_workbench_menu(menu)
+        menu.exec(global_pos)
+
+    def _populate_oc_add_menu(self, menu: QMenu, anchor: QPoint | None = None) -> None:
+        menu.setTitle(self._translator.t("workbench_add_oc"))
+        ocs = self._library_panel.oc_entries()
+        available = [
+            (index, entry)
+            for index, entry in enumerate(ocs)
+            if not getattr(entry, "enabled", True)
+        ]
+        if available:
+            for index, entry in available:
+                label = entry.character_name.strip() or self._translator.t("character_name")
+                action = menu.addAction(label)
+                action.triggered.connect(lambda checked=False, i=index: self._activate_oc_entry(i))
+        else:
+            empty = menu.addAction(self._translator.t("workbench_all_ocs_added"))
+            empty.setEnabled(False)
+        menu.addSeparator()
+        menu.addAction(self._translator.t("workbench_new_oc"), lambda: self._new_oc_entry(anchor))
+        menu.addAction(self._translator.t("workbench_open_oc_library"), lambda: self._open_library_section("oc", toggle=True, anchor=anchor))
+
+    def _activate_oc_entry(self, index: int) -> None:
+        self._library_panel.set_oc_enabled(index, True)
+        self._workbench_oc_strip.set_entries(self._library_panel.oc_entries())
+
+    def _new_oc_entry(self, anchor: QPoint | None = None) -> None:
+        self._library_panel.add_oc_entry()
+        self._open_library_section("oc", toggle=False, anchor=anchor)
+        self._library_panel.focus_oc_entry(len(self._library_panel.oc_entries()) - 1)
+
+    def _edit_oc_entry(self, index: int, anchor: QPoint | None = None) -> None:
+        self._open_library_section("oc", toggle=False, anchor=anchor)
+        self._library_panel.focus_oc_entry(index)
+
+    def _remove_oc_entry(self, index: int) -> None:
+        self._library_panel.set_oc_enabled(index, False)
+        self._workbench_oc_strip.set_entries(self._library_panel.oc_entries())
+
+    def _update_oc_entry(self, index: int, entry: OCEntry) -> None:
+        self._library_panel.update_oc_entry(index, entry)
+        self._workbench_oc_strip.set_entries(self._library_panel.oc_entries())
+
+    def _copy_all_workbench_tags(self) -> None:
+        texts = [
+            self.output_widget.full_editor.toPlainText().strip(),
+            self.output_widget.nochar_editor.toPlainText().strip(),
+        ]
+        QApplication.clipboard().setText("\n".join(text for text in texts if text))
+
+    def _refresh_workbench_timeline(self, entries: list[HistoryEntry] | None = None) -> None:
+        if not hasattr(self, "workbench_timeline") or self.workbench_timeline is None:
+            return
+        if entries is None:
+            entries = self._storage.load_history(retention_days=self._state.settings.history_retention_days)
+        self.workbench_timeline.set_history_entries(entries)
+
+    def _same_history_entry(self, left: HistoryEntry, right: HistoryEntry) -> bool:
+        return (
+            left.timestamp == right.timestamp
+            and left.input_text == right.input_text
+            and left.model == right.model
+        )
+
+    def _persist_current_history_output(self) -> None:
+        entry = self._current_history_entry
+        if entry is None or self._syncing_history_output or self._worker is not None:
+            return
+        output_text = self.output_widget.full_editor.toPlainText().strip()
+        nochar_text = self.output_widget.nochar_editor.toPlainText().strip()
+        tag_categories = self.output_widget.tag_categories()
+        if (
+            output_text == entry.output_text
+            and nochar_text == entry.nochar_text
+            and tag_categories == getattr(entry, "tag_categories", {})
+        ):
+            return
+        entry.output_text = output_text
+        entry.nochar_text = nochar_text
+        entry.tag_categories = tag_categories
+        entries = self._storage.load_history(retention_days=0)
+        replaced = False
+        for idx, existing in enumerate(entries):
+            if self._same_history_entry(existing, entry):
+                entries[idx] = entry
+                replaced = True
+                break
+        if not replaced:
+            entries.insert(0, entry)
+        self._storage.save_history(entries, retention_days=self._state.settings.history_retention_days)
+        self._history_sidebar.set_entries(
+            self._storage.load_history(retention_days=self._state.settings.history_retention_days)
+        )
+        self._refresh_workbench_timeline()
+
+    def _on_output_widget_changed(self) -> None:
+        self._persist_current_history_output()
+
+    def _new_workbench_session(self) -> None:
+        self.input_widget.clear_text()
+        self.output_widget.clear_output()
+        self.main_card.show()
+        self.main_card.raise_()
+
+    @staticmethod
+    def _style_workbench_menu(menu: QMenu) -> None:
+        apply_app_menu_style(menu)
+
+    def _open_library_section(self, section: str, *, toggle: bool = False, anchor: QPoint | None = None) -> None:
+        target = "oc" if section == "oc" else "artist"
+        self._sidebar_anchor_global = anchor
+        if toggle and self._right_sidebar_mode == "library" and self._library_panel.current_section() == target:
+            self._close_sidebar()
+            return
+        if section == "oc":
+            self._library_panel.open_oc_library()
+        else:
+            self._library_panel.open_artist_library()
+        self._open_sidebar("library")
+
+    def _open_history_panel(self, *, toggle: bool = False, anchor: QPoint | None = None) -> None:
+        self._sidebar_anchor_global = anchor
+        if toggle and self._right_sidebar_mode == "history":
+            self._close_sidebar()
+            return
+        entries = self._storage.load_history(retention_days=self._state.settings.history_retention_days)
+        self._history_sidebar.set_entries(entries)
+        self._refresh_workbench_timeline(entries)
+        self._open_sidebar("history")
 
     def _handle_send_action(self) -> None:
         if self._worker is not None and self._worker.isRunning():
@@ -1975,13 +2528,26 @@ class MainWindow(QWidget):
         if settings.pres_penalty != 0:
             payload['presence_penalty'] = settings.pres_penalty
         self.output_widget.clear_output()
+        self.output_widget.set_generation_status("running")
         self.main_card.show()
         self.main_card.raise_()
         user_text = self.input_widget.text().strip()
         self._pending_history_input = user_text
         self._pending_history_model = settings.model
+        self.workbench_timeline.add_history_item(user_text, tokens=0, status="ok")
         self.input_widget.clear_text()
         self._start_worker(f'{base_url}/chat/completions', payload, settings.api_key, stream=settings.stream, summary_mode=False)
+
+    def _handle_regenerate_action(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.cancel()
+            return
+        current_text = self.input_widget.text().strip()
+        if not current_text and self._current_history_entry is not None:
+            current_text = self._current_history_entry.input_text.strip()
+        if current_text:
+            self.input_widget.set_text(current_text)
+        self._handle_send_action()
 
     def _handle_summary_action(self) -> None:
         if self._worker is not None and self._worker.isRunning():
@@ -2044,14 +2610,18 @@ class MainWindow(QWidget):
         dialog.exec()
 
     def _on_worker_error(self, message: str, status_code: int, details: str) -> None:
+        if self._current_mode == 'chat':
+            self.workbench_timeline.mark_current(status="failed")
         if self._pending_history_input and self._current_mode == 'chat':
             self.input_widget.set_text(self._pending_history_input)
             self._pending_history_input = ""
             self._pending_history_model = ""
             self._update_token_estimate()
         is_config_error = status_code == 0
-        error_text = f"[Error] {message}"
+        error_text = f"{self._translator.t('error_prefix')} {message}"
         self.output_widget.append_full_text(error_text)
+        if self._current_mode == 'chat':
+            self.output_widget.set_generation_status("error")
         if is_config_error:
             # URL/connection errors — show in output only, open settings
             if not self.settings_panel.is_open():
@@ -2076,6 +2646,8 @@ class MainWindow(QWidget):
             self._pending_history_model = ""
             self._update_token_estimate()
         self._finish_worker_state()
+        if self._current_mode == 'chat':
+            self.output_widget.set_generation_status("done")
 
     def _on_worker_finished(self) -> None:
         s = self._state.settings
@@ -2102,8 +2674,12 @@ class MainWindow(QWidget):
                     nochar_text=nochar_text,
                     timestamp=datetime.now().isoformat(timespec='seconds'),
                     model=self._pending_history_model,
+                    tag_categories=self.output_widget.tag_categories(),
                 )
                 self._history_sidebar.add_entry(entry)
+                self._current_history_entry = entry
+                self.workbench_timeline.mark_current(tokens=len(output_text.split()), status="ok")
+                self.workbench_timeline.attach_current_entry(entry)
             self._pending_history_input = ""
             self._pending_history_model = ""
         self._finish_worker_state()
@@ -2215,7 +2791,7 @@ class MainWindow(QWidget):
         combo.showPopup()
 
     def _export_prompts(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, self._translator.t('export_prompts'), 'prompts.json', 'JSON (*.json)')
+        path, _ = QFileDialog.getSaveFileName(self, self._translator.t('export_prompts'), 'prompts.json', json_filter(self._translator))
         if not path:
             return
         try:
@@ -2230,7 +2806,7 @@ class MainWindow(QWidget):
             )
 
     def _import_prompts(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('import_prompts'), '', 'JSON (*.json)')
+        path, _ = QFileDialog.getOpenFileName(self, self._translator.t('import_prompts'), '', json_filter(self._translator))
         if not path:
             return
         try:
@@ -2266,7 +2842,7 @@ class MainWindow(QWidget):
             self,
             self._translator.t('export_config'),
             default_name,
-            'HainTag Config (*.aitg.json *.json)',
+            config_filter(self._translator),
         )
         if not path:
             return
@@ -2302,7 +2878,7 @@ class MainWindow(QWidget):
             self,
             self._translator.t('import_config'),
             '',
-            'HainTag Config (*.aitg.json *.json)',
+            config_filter(self._translator),
         )
         if not path:
             return
@@ -2329,9 +2905,9 @@ class MainWindow(QWidget):
             )
             if CONFIG_SCOPE_HISTORY in normalized_scopes:
                 self._storage.save_history(history_entries, retention_days=self._state.settings.history_retention_days)
-                self._history_sidebar.set_entries(
-                    self._storage.load_history(retention_days=self._state.settings.history_retention_days)
-                )
+                loaded_history = self._storage.load_history(retention_days=self._state.settings.history_retention_days)
+                self._history_sidebar.set_entries(loaded_history)
+                self._refresh_workbench_timeline(loaded_history)
         except ValueError as exc:
             self._report_issue(
                 'import_error',
@@ -2366,6 +2942,8 @@ class MainWindow(QWidget):
         self._library_panel.retranslate_ui()
         self._history_sidebar.retranslate_ui()
         self._floating_tray.retranslate_ui()
+        if hasattr(self, "_image_manager") and self._image_manager is not None:
+            self._image_manager.retranslate_ui()
         self._history_tab_btn.setToolTip(self._translator.t("history_panel"))
         for index, widget_id in enumerate(sorted(self._example_cards), start=1):
             label = f"{self._translator.t('example')} {index}"
@@ -2390,6 +2968,7 @@ class MainWindow(QWidget):
         self.btn_settings.setToolTip(self._translator.t('settings'))
         self.btn_gallery.setToolTip(self._translator.t('image_manager'))
         self.btn_help.setToolTip(self._translator.t('shortcuts'))
+        self._version_label.setToolTip(self._translator.t("changelog"))
         self.btn_pin.setText('📌' if bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) else '📍')
         self.btn_pin.setToolTip(
             self._translator.t('pin_off') if bool(self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint) else self._translator.t('pin_on')
@@ -2402,19 +2981,28 @@ class MainWindow(QWidget):
         close_title = self._translator.t('tip_close_card')
         pin_on = self._translator.t('pin_on')
         pin_off = self._translator.t('pin_off')
-        self.prompt_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
-        self.main_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
-        self.metadata_viewer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
-        self.metadata_destroyer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
-        self.interrogator_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+        dock_back = self._translator.t('widget_return_workspace')
+        dock_close = self._translator.t('widget_stow')
+        self.prompt_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
+        self.main_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
+        self.metadata_viewer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
+        self.metadata_destroyer_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
+        self.interrogator_card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
         self.prompt_manager.retranslate_ui()
         self.input_widget.retranslate_ui()
         self.input_widget.set_send_mode(self._state.settings.send_mode)
+        if hasattr(self, "workbench_timeline") and self.workbench_timeline is not None:
+            self.workbench_timeline.retranslate_ui()
+        if hasattr(self, "_workbench_oc_strip") and self._workbench_oc_strip is not None:
+            self._workbench_oc_strip.retranslate_ui()
+        if hasattr(self, "_workbench_hint") and self._workbench_hint is not None:
+            self._workbench_hint.setText("")
+            self._workbench_hint.hide()
         self.settings_panel.retranslate_ui()
         self.dock_panel.set_close_label(self._translator.t('close'))
         self._lib_tab_btn.setToolTip(self._translator.t('artist_library'))
         for card, editor in self._example_cards.values():
-            card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off)
+            card.retranslate_ui(grip_title, resize_title, close_title, pin_on, pin_off, dock_back, dock_close)
             editor.retranslate_ui()
         self._refresh_dock_items()
 
@@ -2472,9 +3060,31 @@ class MainWindow(QWidget):
             )
             card.show()
             if card.x() == 0 and card.y() == 0:
-                card.setGeometry(self.workspace.find_free_position(QSize(440, 520), exclude=card))
+                card.setGeometry(self.workspace.find_free_position(QSize(760, 620), exclude=card))
             self.workspace.resolve_overlap(card)
         self._refresh_dock_items()
+        self._schedule_save()
+
+    def _open_interrogator_with_images(self, paths: list[str]) -> None:
+        valid = [path for path in paths if path]
+        if not valid:
+            return
+        card = self.interrogator_card
+        if not card.isVisible():
+            s = self.settings_panel.settings()
+            from .logic import normalize_api_base_url
+            self.interrogator_widget.set_api_settings(
+                normalize_api_base_url(s.api_base_url), s.api_key, s.model
+            )
+            card.show()
+            if card.x() == 0 and card.y() == 0:
+                card.setGeometry(self.workspace.find_free_position(QSize(760, 620), exclude=card))
+            if card.x() < 0 or card.y() < 0:
+                card.move(max(0, card.x()), max(0, card.y()))
+            self.workspace.resolve_overlap(card)
+            self._refresh_dock_items()
+        self.interrogator_widget.load_images(valid)
+        card.raise_()
         self._schedule_save()
 
     def _open_image_manager(self) -> None:
@@ -2487,6 +3097,7 @@ class MainWindow(QWidget):
         self._image_manager = ImageManagerWindow(self._translator, initial_folder, self._storage, self)
         self._image_manager.send_to_input.connect(self._on_image_manager_send)
         self._image_manager.use_as_example.connect(self._on_image_manager_example)
+        self._image_manager.send_to_interrogator.connect(self._open_interrogator_with_images)
         self._image_manager.folder_changed.connect(self._on_image_manager_folder)
         self._image_manager.show()
         self._image_manager.load_initial_folder()
@@ -2504,10 +3115,7 @@ class MainWindow(QWidget):
 
     def _toggle_library(self) -> None:
         self._state.settings.library_last_section = self._library_panel.current_section()
-        if self._right_sidebar_mode == 'library':
-            self._close_right_sidebar()
-        else:
-            self._open_right_sidebar('library')
+        self._toggle_sidebar('library')
         self._position_library()
 
     def _position_library(self) -> None:
@@ -2516,15 +3124,27 @@ class MainWindow(QWidget):
         card = self.main_card
         sidebar = self._library_panel
         sidebar.setFixedHeight(card.height())
-        if card._floating:
-            card_global = card.mapToGlobal(card.rect().topRight())
-            sidebar.move(card_global.x(), card_global.y())
+        anchor = getattr(self, "_sidebar_anchor_global", None)
+        if card.is_floating():
+            if anchor is not None:
+                sidebar.move(anchor.x(), max(0, anchor.y() - _dp(12)))
+            else:
+                card_global = card.mapToGlobal(card.rect().topRight())
+                sidebar.move(card_global.x(), card_global.y())
         else:
-            sidebar.move(card.x() + card.width() + self._lib_tab_btn.width(), card.y())
+            if anchor is not None:
+                local = self.workspace.mapFromGlobal(anchor)
+                x = min(max(0, local.x() + _dp(8)), max(0, self.workspace.width() - sidebar.width()))
+                y = min(max(0, local.y() - _dp(12)), max(0, self.workspace.height() - sidebar.height()))
+                sidebar.move(x, y)
+            else:
+                sidebar.move(card.x() + card.width(), card.y())
         sidebar.raise_()
 
     def _on_library_changed(self) -> None:
         self._state.settings.library_last_section = self._library_panel.current_section()
+        if hasattr(self, "_workbench_oc_strip"):
+            self._workbench_oc_strip.set_entries(self._library_panel.oc_entries())
         self._storage.save_library(
             self._library_panel.artist_entries(),
             self._library_panel.oc_entries(),
@@ -2567,18 +3187,43 @@ class MainWindow(QWidget):
         h.register(self._lib_tab_btn, "hint_library",
                    "hint_library", position="left", delay_ms=6000)
 
-    def _on_history_fill(self, output_text: str, nochar_text: str) -> None:
+    def _on_history_output_selected(self, output_text: str) -> None:
+        self._syncing_history_output = True
         self.output_widget.set_full_tags(output_text)
-        if nochar_text:
-            self.output_widget.nochar_editor.setPlainText(nochar_text)
+        self._syncing_history_output = False
+        self._current_history_entry = None
         self.main_card.show()
         self.main_card.raise_()
 
+    def _restore_history_entry(self, entry: HistoryEntry) -> None:
+        self._syncing_history_output = True
+        self.input_widget.set_text(entry.input_text)
+        self.output_widget.set_full_tags(entry.output_text)
+        self.output_widget.set_nochar_tags(entry.nochar_text)
+        self.output_widget.set_tag_categories(getattr(entry, "tag_categories", {}))
+        self._syncing_history_output = False
+        self._current_history_entry = entry
+        self._update_token_estimate()
+        self.main_card.show()
+        self.main_card.raise_()
+
+    def _on_history_fill(self, output_text: str, nochar_text: str = "") -> None:
+        self._syncing_history_output = True
+        self.output_widget.set_full_tags(output_text)
+        self.output_widget.set_nochar_tags(nochar_text)
+        self._syncing_history_output = False
+        self._current_history_entry = None
+        self.main_card.show()
+        self.main_card.raise_()
+
+    def _on_timeline_entry_selected(self, entry: object) -> None:
+        if isinstance(entry, HistoryEntry):
+            self._restore_history_entry(entry)
+            return
+        self._open_history_panel(toggle=False, anchor=QCursor.pos())
+
     def _toggle_history_sidebar(self) -> None:
-        if self._right_sidebar_mode == 'history':
-            self._close_right_sidebar()
-        else:
-            self._open_right_sidebar('history')
+        self._toggle_sidebar('history')
         self._position_history_sidebar()
 
     def _position_history_btn(self) -> None:
@@ -2586,42 +3231,26 @@ class MainWindow(QWidget):
 
     def _position_right_rail(self) -> None:
         card = self.main_card
+        self._history_tab_btn.hide()
+        self._lib_tab_btn.hide()
         if not card.isVisible():
-            self._history_tab_btn.hide()
-            self._lib_tab_btn.hide()
             self._history_sidebar.hide()
             self._library_panel.hide()
             return
-
-        buttons = [self._lib_tab_btn, self._history_tab_btn]
-        for button in buttons:
-            button.show()
-
-        if self._history_tab_btn.parent() is card:
-            x = card.width() - self._history_tab_btn.width()
-            center_y = (card.height() - (len(buttons) * self._history_tab_btn.height() + _dp(6))) // 2
-        else:
-            x = card.x() + card.width()
-            center_y = card.y() + (card.height() - (len(buttons) * self._history_tab_btn.height() + _dp(6))) // 2
-
-        for index, button in enumerate(buttons):
-            button.move(x, center_y + index * (button.height() + _dp(6)))
-            button.raise_()
-
         self._position_history_sidebar()
         self._position_library()
 
     def _reparent_right_rail_to_card(self) -> None:
         for button in (self._lib_tab_btn, self._history_tab_btn):
             button.setParent(self.main_card)
-            button.show()
+            button.hide()
         self._reparent_sidebar_for_mode(self._right_sidebar_mode, floating=True)
         self._position_right_rail()
 
     def _reparent_right_rail_to_workspace(self) -> None:
         for button in (self._lib_tab_btn, self._history_tab_btn):
             button.setParent(self.workspace)
-            button.show()
+            button.hide()
         self._reparent_sidebar_for_mode(self._right_sidebar_mode, floating=False)
         QTimer.singleShot(50, self._position_right_rail)
 
@@ -2634,20 +3263,38 @@ class MainWindow(QWidget):
         card = self.main_card
         sidebar = self._history_sidebar
         sidebar.setFixedHeight(card.height())
-
-        if card._floating:
-            card_global = card.mapToGlobal(card.rect().topRight())
-            sidebar.move(card_global.x(), card_global.y())
+        anchor = getattr(self, "_sidebar_anchor_global", None)
+        if card.is_floating():
+            if anchor is not None:
+                sidebar.move(anchor.x(), max(0, anchor.y() - _dp(12)))
+            else:
+                card_global = card.mapToGlobal(card.rect().topRight())
+                sidebar.move(card_global.x(), card_global.y())
         else:
-            sidebar_x = card.x() + card.width() + self._history_tab_btn.width()
-            sidebar_y = card.y()
-            sidebar.move(sidebar_x, sidebar_y)
+            if anchor is not None:
+                local = self.workspace.mapFromGlobal(anchor)
+                x = min(max(0, local.x() + _dp(8)), max(0, self.workspace.width() - sidebar.width()))
+                y = min(max(0, local.y() - _dp(12)), max(0, self.workspace.height() - sidebar.height()))
+                sidebar.move(x, y)
+            else:
+                sidebar_x = card.x() + card.width()
+                sidebar_y = card.y()
+                sidebar.move(sidebar_x, sidebar_y)
         sidebar.raise_()
 
-    def _open_right_sidebar(self, mode: str) -> None:
-        self._close_right_sidebar(except_mode=mode)
+    def _toggle_sidebar(self, mode: str) -> None:
+        if self._right_sidebar_mode == mode:
+            self._close_sidebar()
+            return
+        self._open_sidebar(mode)
+
+    def _open_sidebar(self, mode: str) -> None:
+        if mode not in {'library', 'history'}:
+            return
+        if self._right_sidebar_mode and self._right_sidebar_mode != mode:
+            self._close_sidebar()
         self._right_sidebar_mode = mode
-        self._reparent_sidebar_for_mode(mode, floating=self.main_card._floating)
+        self._reparent_sidebar_for_mode(mode, floating=self.main_card.is_floating())
         if mode == 'library':
             self._library_panel.apply_theme()
             self._library_panel.show()
@@ -2661,14 +3308,23 @@ class MainWindow(QWidget):
             self._lib_tab_btn.setText("◂")
             self._position_history_sidebar()
 
+    def _close_sidebar(self) -> None:
+        self._library_panel.hide()
+        self._history_sidebar.hide()
+        self._sidebar_anchor_global = None
+        self._lib_tab_btn.setText("◂")
+        self._history_tab_btn.setText("◁")
+        self._right_sidebar_mode = ''
+
+    def _open_right_sidebar(self, mode: str) -> None:
+        self._open_sidebar(mode)
+
     def _close_right_sidebar(self, except_mode: str = '') -> None:
-        if except_mode != 'library':
-            self._library_panel.hide()
-            self._lib_tab_btn.setText("◂")
-        if except_mode != 'history':
-            self._history_sidebar.hide()
-            self._history_tab_btn.setText("◁")
-        self._right_sidebar_mode = except_mode if except_mode in {'library', 'history'} else ''
+        if except_mode in {'library', 'history'}:
+            if self._right_sidebar_mode != except_mode:
+                self._close_sidebar()
+            return
+        self._close_sidebar()
 
     def _reparent_sidebar_for_mode(self, mode: str, *, floating: bool) -> None:
         if mode == 'history':
@@ -2732,7 +3388,7 @@ class MainWindow(QWidget):
                     pass
                 break
         if not content:
-            content = "No changelog found."
+            content = self._translator.t("changelog_empty")
 
         # Styled popup
         from .theme import current_palette
@@ -2747,7 +3403,7 @@ class MainWindow(QWidget):
             #ChangelogSurface {{
                 background: {pal['bg']};
                 border: 1px solid {pal['line_strong']};
-                border-radius: 8px;
+                border-radius: {_dp(8)}px;
             }}
         """)
 
@@ -2769,13 +3425,14 @@ class MainWindow(QWidget):
                 background: {pal['bg_content']};
                 color: {pal['text_muted']};
                 border: 1px solid {pal['line']};
-                border-radius: 4px;
-                padding: 8px;
+                border-radius: {_dp(4)}px;
+                padding: {_dp(8)}px;
                 font-size: {_fs('fs_11')};
             }}
         """)
         text_edit.setMinimumHeight(_dp(300))
         layout.addWidget(text_edit)
+        install_localized_context_menus(surface, self._translator)
 
         root_layout = QVBoxLayout(popup)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -2784,21 +3441,13 @@ class MainWindow(QWidget):
 
         # Position above the version label
         lbl_pos = self._version_label.mapToGlobal(QPoint(
-            self._version_label.width() - 400,
-            -424))
+            self._version_label.width() - _dp(400),
+            -_dp(424)))
         popup.move(lbl_pos)
         popup.show()
 
     def _on_workspace_image_dropped(self, path: str) -> None:
-        card = self.metadata_viewer_card
-        if not card.isVisible():
-            card.show()
-            if card.x() == 0 and card.y() == 0:
-                card.setGeometry(self.workspace.find_free_position(QSize(400, 360), exclude=card))
-            self.workspace.resolve_overlap(card)
-            self._refresh_dock_items()
-        self.metadata_viewer_widget.load_image(path)
-        self._schedule_save()
+        self._open_interrogator_with_images([path])
 
     def moveEvent(self, event) -> None:
         if not self.isMaximized():
@@ -2972,7 +3621,6 @@ class MainWindow(QWidget):
 
     def _check_update_auto(self) -> None:
         """Auto-check on startup (respects skipped_version)."""
-        settings = self.settings_panel.settings()
         from ._version import __version__
         from .updater import UpdateChecker
         self._update_checker = UpdateChecker(__version__, self)
@@ -2984,21 +3632,40 @@ class MainWindow(QWidget):
 
     def check_update_manual(self) -> None:
         """Manual check from settings panel (ignores skipped_version)."""
+        checker = getattr(self, "_update_checker", None)
+        is_running = getattr(checker, "isRunning", None)
+        if checker is not None and callable(is_running) and is_running():
+            self._set_update_checking(True)
+            if hasattr(checker, "finished"):
+                checker.finished.connect(lambda: self._set_update_checking(False))
+            self.input_widget.append_status_line(self._translator.t("update_checking"))
+            return
         from ._version import __version__
         from .updater import UpdateChecker
+        self._set_update_checking(True)
         self._update_checker = UpdateChecker(__version__, self)
         self._update_checker.update_available.connect(
             lambda ver, cl, url: self._show_update_dialog(ver, cl, url, auto=False)
         )
         self._update_checker.no_update.connect(self._show_no_update)
+        self._update_checker.check_error.connect(self._show_update_error)
+        if hasattr(self._update_checker, "finished"):
+            self._update_checker.finished.connect(lambda: self._set_update_checking(False))
         self._update_checker.start()
+
+    def _set_update_checking(self, checking: bool) -> None:
+        button = getattr(self.settings_panel, "check_update_button", None)
+        if button is None:
+            return
+        button.setEnabled(not checking)
+        button.setText(self._translator.t("update_checking") if checking else self._translator.t("check_update"))
 
     def _show_update_dialog(self, version: str, changelog: str,
                             download_url: str, auto: bool) -> None:
-        settings = self.settings_panel.settings()
         from .updater import _parse_version
-        if auto and settings.skipped_version:
-            if _parse_version(version) <= _parse_version(settings.skipped_version):
+        skipped_version = self._state.settings.skipped_version
+        if auto and skipped_version:
+            if _parse_version(version) <= _parse_version(skipped_version):
                 return
         from .updater import UpdateDialog
         dialog = UpdateDialog(version, changelog, download_url, self._translator, self)
@@ -3015,6 +3682,11 @@ class MainWindow(QWidget):
         dialog = NoUpdateDialog(__version__, self._translator, self)
         dialog.exec()
 
+    def _show_update_error(self, message: str) -> None:
+        self.input_widget.append_status_line(
+            self._translator.t("update_check_failed_detail").format(message=message)
+        )
+
     def _apply_update(self, extracted_dir: str) -> None:
         import os
         import subprocess
@@ -3024,6 +3696,7 @@ class MainWindow(QWidget):
             source_dir=extracted_dir,
             target_dir=os.path.dirname(sys.executable),
             exe_path=sys.executable,
+            failed_message=self._translator.t("update_apply_failed"),
         )
         self._persist_state()
         subprocess.Popen(
@@ -3065,18 +3738,10 @@ class MainWindow(QWidget):
 
     def _on_destroy_template_changed(self, index: int) -> None:
         text = self._destroy_combo.itemData(index)
-        self.metadata_destroyer_widget._destroy_text = text if text else None
+        self.metadata_destroyer_widget.set_destroy_text(text if text else None)
         name = self._destroy_combo.itemText(index)
         self._state.settings.active_destroy_template = name
         self._schedule_save()
-
-    def _position_destroy_combo(self) -> None:
-        card = self.metadata_destroyer_card
-        combo = self._destroy_combo
-        close_btn = card._close_btn
-        # Position: left of close button
-        cy = max(0, (card._drag_strip.height() - combo.height()) // 2)
-        combo.move(close_btn.x() - combo.width() - 4, cy)
 
     def _show_destroy_template_menu(self, pos) -> None:
         self._open_destroy_template_editor()

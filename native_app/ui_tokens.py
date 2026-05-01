@@ -21,8 +21,25 @@ def _dpi_scale() -> float:
     return 1.0
 
 
+_app_ui_scale = 1.0
+
+
+def set_app_ui_scale(percent: int | float) -> None:
+    """Set the app-level UI scale used by pixel tokens outside QSS."""
+    global _app_ui_scale
+    try:
+        value = float(percent)
+    except (TypeError, ValueError):
+        value = 100.0
+    _app_ui_scale = max(0.5, min(3.0, value / 100.0))
+
+
+def app_ui_scale() -> float:
+    return _app_ui_scale
+
+
 def _dp(px: int | float) -> int:
-    return max(1, int(round(float(px) * _dpi_scale())))
+    return max(1, int(round(float(px) * _dpi_scale() * _app_ui_scale)))
 
 WINDOW_RADIUS = 12
 WINDOW_SURFACE_MARGIN = 8
@@ -42,9 +59,9 @@ DOCK_COLLAPSED_THICKNESS = 40
 DOCK_COLLAPSED_MIN = 32
 DOCK_COLLAPSED_MAX_SIDE = 120
 DOCK_COLLAPSED_MAX_TOP = 96
-DOCK_EXPANDED_SIDE = 132
-DOCK_EXPANDED_SIDE_MIN = 72
-DOCK_EXPANDED_SIDE_MAX = 240
+DOCK_EXPANDED_SIDE = 188
+DOCK_EXPANDED_SIDE_MIN = 128
+DOCK_EXPANDED_SIDE_MAX = 320
 DOCK_EXPANDED_TOP = 84
 DOCK_EXPANDED_TOP_MIN = 60
 DOCK_EXPANDED_TOP_MAX = 170

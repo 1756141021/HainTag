@@ -25,22 +25,60 @@ from PyQt6.QtWidgets import (
 
 from .theme import _fs, current_palette
 from .ui_tokens import _dp
+from .widgets.text_context_menu import install_localized_context_menus
 
 _GITHUB_API = "https://api.github.com/repos/1756141021/HainTag/releases/latest"
 _GITHUB_RELEASES_PAGE = "https://github.com/1756141021/HainTag/releases"
 
 
 def _parse_version(tag: str) -> tuple[int, ...]:
-    """Parse 'v0.5.21' or '0.5.21' into a comparable tuple."""
-    cleaned = tag.lstrip("vV")
-    parts = re.split(r"[.\-]", cleaned)
-    result = []
-    for p in parts:
-        try:
-            result.append(int(p))
-        except ValueError:
+    """Parse common release tags into tuples where releases sort above prereleases."""
+    cleaned = tag.strip().lstrip("vV")
+    without_build = cleaned.split("+", 1)[0]
+    main_part, _, prerelease = without_build.partition("-")
+    result: list[int] = []
+    for part in main_part.split("."):
+        match = re.match(r"\d+", part)
+        if not match:
             break
-    return tuple(result) or (0,)
+        result.append(int(match.group(0)))
+    while len(result) > 3 and result[-1] == 0:
+        result.pop()
+    while len(result) < 3:
+        result.append(0)
+    if prerelease:
+        prerelease_nums = [int(item) for item in re.findall(r"\d+", prerelease)]
+        return tuple([*result, 0, *prerelease_nums])
+    return tuple([*result, 1])
+
+
+def _is_zip_download_url(url: str) -> bool:
+    return str(url or "").lower().split("?", 1)[0].endswith(".zip")
+
+
+def _release_download_url(assets: list[Any]) -> str:
+    """Pick the Windows ZIP asset instead of blindly downloading the first file."""
+    windows_candidates: list[str] = []
+    generic_candidates: list[str] = []
+    windows_markers = ("windows", "win64", "win32", "win-x64", "x64", "amd64")
+    other_platform_markers = ("macos", "darwin", "linux", "arm64")
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        url = str(asset.get("browser_download_url", "") or "")
+        name = str(asset.get("name", "") or url).lower()
+        if not url or not name.endswith(".zip"):
+            continue
+        is_other_platform = any(marker in name for marker in other_platform_markers)
+        if any(marker in name for marker in windows_markers) and not is_other_platform:
+            windows_candidates.append(url)
+        elif "haintag" in name and not is_other_platform:
+            generic_candidates.append(url)
+    if windows_candidates:
+        return windows_candidates[0]
+    if generic_candidates:
+        return generic_candidates[0]
+    return _GITHUB_RELEASES_PAGE
 
 
 class UpdateChecker(QThread):
@@ -64,9 +102,7 @@ class UpdateChecker(QThread):
             tag = data.get("tag_name", "")
             body = data.get("body", "")
             assets = data.get("assets", [])
-            download_url = _GITHUB_RELEASES_PAGE
-            if assets:
-                download_url = assets[0].get("browser_download_url", download_url)
+            download_url = _release_download_url(assets if isinstance(assets, list) else [])
 
             remote = _parse_version(tag)
             local = _parse_version(self._current)
@@ -92,6 +128,8 @@ class UpdateChecker(QThread):
                 return resp.json()
         except ImportError:
             pass
+        except Exception as exc:
+            last_error = exc
         try:
             import requests
             resp = requests.get(_GITHUB_API, headers=headers, timeout=10)
@@ -99,11 +137,16 @@ class UpdateChecker(QThread):
             return resp.json()
         except ImportError:
             pass
+        except Exception as exc:
+            last_error = exc
         # Last resort: urllib
         import urllib.request
-        req = urllib.request.Request(_GITHUB_API, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            req = urllib.request.Request(_GITHUB_API, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            raise last_error if "last_error" in locals() else exc
 
 
 class UpdateDownloadWorker(QThread):
@@ -137,10 +180,10 @@ class UpdateDownloadWorker(QThread):
             with zipfile.ZipFile(zip_path, "r") as zf:
                 bad = zf.testzip()
                 if bad:
-                    raise RuntimeError(f"Corrupt file in ZIP: {bad}")
+                    raise RuntimeError(self._t.t("update_zip_corrupt").format(file=bad))
                 names = [n.lower().replace("\\", "/") for n in zf.namelist()]
                 if not any(n == "haintag/haintag.exe" for n in names):
-                    raise RuntimeError("HainTag.exe not found in ZIP")
+                    raise RuntimeError(self._t.t("update_zip_missing_exe"))
 
             if self._cancelled:
                 self._cleanup()
@@ -168,6 +211,7 @@ class UpdateDownloadWorker(QThread):
         self.progress.emit(self._t.t("update_downloading"), 0)
         headers = {"User-Agent": "HainTag-Updater/1.0"}
 
+        last_error: Exception | None = None
         try:
             import httpx
             with httpx.stream("GET", self._url, headers=headers,
@@ -178,6 +222,8 @@ class UpdateDownloadWorker(QThread):
             return
         except ImportError:
             pass
+        except Exception as exc:
+            last_error = exc
 
         try:
             import requests as req_lib
@@ -189,11 +235,16 @@ class UpdateDownloadWorker(QThread):
             return
         except ImportError:
             pass
+        except Exception as exc:
+            last_error = exc
 
         import urllib.request
-        req = urllib.request.Request(self._url, headers=headers)
-        resp = urllib.request.urlopen(req, timeout=120)
-        total = int(resp.headers.get("Content-Length", 0))
+        try:
+            req = urllib.request.Request(self._url, headers=headers)
+            resp = urllib.request.urlopen(req, timeout=120)
+            total = int(resp.headers.get("Content-Length", 0))
+        except Exception as exc:
+            raise last_error or exc
 
         def _chunks():
             while True:
@@ -223,7 +274,8 @@ class UpdateDownloadWorker(QThread):
 
 
 def _generate_update_script(pid: int, source_dir: str,
-                            target_dir: str, exe_path: str) -> str:
+                            target_dir: str, exe_path: str,
+                            failed_message: str = "Update failed") -> str:
     """Write a batch script with baked-in paths and return its path."""
     content = (
         '@echo off\n'
@@ -234,7 +286,7 @@ def _generate_update_script(pid: int, source_dir: str,
         'timeout /t 1 /nobreak >nul\n'
         f'robocopy "{source_dir}\\HainTag" "{target_dir}" '
         '/MIR /R:3 /W:2 /NP /NFL /NDL /NJH /NJS\n'
-        'if %errorlevel% GTR 7 (echo Update failed & pause & goto end)\n'
+        f'if %errorlevel% GTR 7 (echo {failed_message} & pause & goto end)\n'
         f'start "" "{exe_path}"\n'
         ':end\n'
         f'rd /s /q "{source_dir}" >nul 2>&1\n'
@@ -287,8 +339,8 @@ class UpdateDialog(QDialog):
             cl_edit.setMaximumHeight(_dp(250))
             cl_edit.setStyleSheet(
                 f"background: {p['bg_input']}; color: {p['text']}; "
-                f"border: 1px solid {p['line']}; border-radius: 4px; "
-                f"font-size: {_fs('fs_10')}; padding: 8px;"
+                f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; "
+                f"font-size: {_fs('fs_10')}; padding: {_dp(8)}px;"
             )
             layout.addWidget(cl_edit)
 
@@ -303,8 +355,8 @@ class UpdateDialog(QDialog):
         skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         skip_btn.setStyleSheet(
             f"color: {p['text_dim']}; background: transparent; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px 16px; font-size: {_fs('fs_10')};"
+            f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; "
+            f"padding: {_dp(6)}px {_dp(16)}px; font-size: {_fs('fs_10')};"
         )
         skip_btn.clicked.connect(self._on_skip)
         btn_row.addWidget(skip_btn)
@@ -313,8 +365,8 @@ class UpdateDialog(QDialog):
         later_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         later_btn.setStyleSheet(
             f"color: {p['text']}; background: transparent; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px 16px; font-size: {_fs('fs_10')};"
+            f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; "
+            f"padding: {_dp(6)}px {_dp(16)}px; font-size: {_fs('fs_10')};"
         )
         later_btn.clicked.connect(self._on_later)
         btn_row.addWidget(later_btn)
@@ -323,8 +375,8 @@ class UpdateDialog(QDialog):
         update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         update_btn.setStyleSheet(
             f"color: {p['accent_text']}; background: {p['accent']}; "
-            f"border: none; border-radius: 4px; "
-            f"padding: 6px 20px; font-size: {_fs('fs_11')}; font-weight: bold;"
+            f"border: none; border-radius: {_dp(4)}px; "
+            f"padding: {_dp(6)}px {_dp(20)}px; font-size: {_fs('fs_11')}; font-weight: bold;"
         )
         update_btn.clicked.connect(self._on_update)
         btn_row.addWidget(update_btn)
@@ -345,8 +397,8 @@ class UpdateDialog(QDialog):
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setFixedHeight(_dp(6))
         self._progress_bar.setStyleSheet(
-            f"QProgressBar {{ background: {p['bg_input']}; border: none; border-radius: 3px; }} "
-            f"QProgressBar::chunk {{ background: {p['accent']}; border-radius: 3px; }}"
+            f"QProgressBar {{ background: {p['bg_input']}; border: none; border-radius: {_dp(3)}px; }} "
+            f"QProgressBar::chunk {{ background: {p['accent']}; border-radius: {_dp(3)}px; }}"
         )
         self._progress_bar.hide()
         layout.addWidget(self._progress_bar)
@@ -355,12 +407,13 @@ class UpdateDialog(QDialog):
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cancel_btn.setStyleSheet(
             f"color: {p['text']}; background: transparent; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px 16px; font-size: {_fs('fs_10')};"
+            f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; "
+            f"padding: {_dp(6)}px {_dp(16)}px; font-size: {_fs('fs_10')};"
         )
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.hide()
         layout.addWidget(self._cancel_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        install_localized_context_menus(self, translator)
 
     @property
     def result_action(self) -> str:
@@ -383,9 +436,9 @@ class UpdateDialog(QDialog):
         self.accept()
 
     def _on_update(self):
-        if not getattr(sys, "frozen", False):
+        if not getattr(sys, "frozen", False) or not _is_zip_download_url(self._download_url):
             self._result_action = self.UPDATE
-            QDesktopServices.openUrl(QUrl(self._download_url))
+            QDesktopServices.openUrl(QUrl(self._download_url or _GITHUB_RELEASES_PAGE))
             self.accept()
             return
         self._downloading = True
@@ -422,8 +475,8 @@ class UpdateDialog(QDialog):
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
             f"color: {p['text']}; background: transparent; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; "
-            f"padding: 6px 16px; font-size: {_fs('fs_10')};"
+            f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; "
+            f"padding: {_dp(6)}px {_dp(16)}px; font-size: {_fs('fs_10')};"
         )
         close_btn.clicked.connect(self.reject)
         self.layout().addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
@@ -464,11 +517,11 @@ class NoUpdateDialog(QDialog):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
-        ok_btn = QPushButton("OK", self)
+        ok_btn = QPushButton(translator.t("ok"), self)
         ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ok_btn.setStyleSheet(
             f"color: {p['text']}; background: {p['accent']}; "
-            f"border: none; border-radius: 4px; padding: 6px 20px; font-size: {_fs('fs_10')};"
+            f"border: none; border-radius: {_dp(4)}px; padding: {_dp(6)}px {_dp(20)}px; font-size: {_fs('fs_10')};"
         )
         ok_btn.clicked.connect(self.accept)
         layout.addWidget(ok_btn, alignment=Qt.AlignmentFlag.AlignCenter)

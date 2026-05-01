@@ -25,6 +25,7 @@ DARK_PALETTE: dict[str, str] = {
     'bg_settings': '#171716',
     'bg_prompt': '#141413',
     'bg_menu': 'rgba(22, 22, 20, 0.96)',
+    'bg_backdrop': 'rgba(0, 0, 0, 0.24)',
     'text': '#F4F4F0',
     'text_body': '#C8C8C0',
     'text_muted': '#7A7A75',
@@ -74,6 +75,7 @@ LIGHT_PALETTE: dict[str, str] = {
     'bg_settings': '#EAEAE4',
     'bg_prompt': '#F8F8F4',
     'bg_menu': 'rgba(244, 244, 240, 0.97)',
+    'bg_backdrop': 'rgba(255, 255, 255, 0.22)',
     'text': '#111111',
     'text_body': '#333333',
     'text_muted': '#888888',
@@ -156,7 +158,7 @@ QWidget {{
 }}
 
 #LibTabBtn {{
-    background: rgba(28, 28, 32, 0.85);
+    background: {bg_menu};
     color: {text_dim};
     border: 1px solid {line};
     border-right: none;
@@ -168,12 +170,12 @@ QWidget {{
     letter-spacing: 1px;
 }}
 #LibTabBtn:hover {{
-    background: rgba(38, 38, 44, 0.95);
+    background: {hover_bg_strong};
     color: {accent_text};
     border-color: {accent};
 }}
 #HistTabBtn {{
-    background: rgba(28, 28, 32, 0.70);
+    background: {bg_menu};
     color: {text_dim};
     border: 1px solid {line_strong};
     border-left: none;
@@ -185,7 +187,7 @@ QWidget {{
     padding: 0px;
 }}
 #HistTabBtn:hover {{
-    background: rgba(38, 38, 44, 0.95);
+    background: {hover_bg_strong};
     color: {accent_text};
     border-color: {accent};
 }}
@@ -230,7 +232,7 @@ QPushButton#TitleBarButton[active="true"] {{
 
 QPushButton#CloseButton:hover {{
     background: {close_hover};
-    color: rgba(255, 255, 255, 0.92);
+    color: {selection_text};
 }}
 
 /* ── Dock Panel ── */
@@ -261,11 +263,12 @@ QPushButton[class="DockItemButton"]:hover {{
 QPushButton[class="DockItemButton"] {{
     background: transparent;
     border: none;
-    border-radius: 6px;
+    border-radius: 0px;
     color: {text_dim};
     font-size: {fs_12};
-    padding: 4px 10px;
-    min-height: 28px;
+    letter-spacing: 0.04em;
+    padding: 7px 14px;
+    min-height: 34px;
     text-align: left;
 }}
 
@@ -351,7 +354,6 @@ QLabel[class="FieldLabel"] {{
 QLabel[class="SliderValue"],
 #TokenLabel {{
     color: {text_muted};
-    font-family: Consolas, "Cascadia Mono", monospace;
     font-size: {fs_11};
 }}
 
@@ -505,7 +507,7 @@ QPushButton:disabled {{
 
 /* ── Settings Panel ── */
 #SettingsBackdrop {{
-    background: rgba(0, 0, 0, 0.24);
+    background: {bg_backdrop};
 }}
 
 #SettingsPanel {{
@@ -1002,7 +1004,6 @@ def generate_qss(theme: str = 'dark', custom_palette: dict[str, str] | None = No
     # 更新主题亮暗状态（供 ToggleSwitch / token label 等自定义绘制组件读取）
     global _is_light, _current_palette
     _is_light = _relative_luminance(palette['bg']) > 0.18
-    _current_palette = dict(palette)
 
     # Font family token — set by app.setFont() profile, QSS must match
     if font_family:
@@ -1032,6 +1033,7 @@ def generate_qss(theme: str = 'dark', custom_palette: dict[str, str] | None = No
         m = _RGBA_RE.match(palette[key])
         if m:
             palette[key] = f'rgba({m.group(1)}, {m.group(2)}, {m.group(3)}, {alpha})'
+    _current_palette = dict(palette)
     return _QSS_TEMPLATE.format(**palette)
 
 
@@ -1071,9 +1073,18 @@ def font_sizes() -> dict[str, str]:
 
 
 def scale_qss(qss: str, scale_percent: int) -> str:
+    global _current_palette
     if scale_percent == 100:
         return qss
     factor = scale_percent / 100.0
+    if _current_palette:
+        scaled = dict(_current_palette)
+        for key in ('fs_9', 'fs_10', 'fs_11', 'fs_12', 'fs_13', 'fs_14'):
+            value = scaled.get(key, '')
+            match = re.fullmatch(r'(\d+)px', value)
+            if match:
+                scaled[key] = f"{max(1, round(int(match.group(1)) * factor))}px"
+        _current_palette = scaled
 
     def _replace(m: re.Match) -> str:
         return f"{max(1, round(int(m.group(1)) * factor))}px"

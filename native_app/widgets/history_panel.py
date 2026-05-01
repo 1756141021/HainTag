@@ -18,12 +18,15 @@ from ..models import HistoryEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
 from ..ui_tokens import _dp
+from .text_context_menu import apply_app_menu_style
 
 
 class _HistoryItem(QWidget):
     """A single history entry row."""
 
     clicked = pyqtSignal(object)  # emits HistoryEntry
+    fill_requested = pyqtSignal(str, str)
+    restore_requested = pyqtSignal(object)
 
     def __init__(self, entry: HistoryEntry, translator: Translator, parent=None):
         super().__init__(parent)
@@ -97,12 +100,17 @@ class _HistoryItem(QWidget):
     def contextMenuEvent(self, event):
         t = self._t
         menu = QMenu(self)
+        apply_app_menu_style(menu)
         fill_act = menu.addAction(t.t("history_fill_output"))
+        restore_act = menu.addAction(t.t("history_restore_workbench"))
+        menu.addSeparator()
         copy_out = menu.addAction(t.t("history_copy_output"))
         copy_in = menu.addAction(t.t("history_copy_input"))
         chosen = menu.exec(event.globalPos())
         if chosen == fill_act:
-            self.clicked.emit(self._entry)
+            self.fill_requested.emit(self._entry.output_text, self._entry.nochar_text)
+        elif chosen == restore_act:
+            self.restore_requested.emit(self._entry)
         elif chosen == copy_out:
             QApplication.clipboard().setText(self._entry.output_text)
         elif chosen == copy_in:
@@ -125,6 +133,8 @@ class HistoryPanel(QWidget):
     """Scrollable list of past generations with click-to-reuse."""
 
     entry_selected = pyqtSignal(str)  # output_text
+    entry_fill_requested = pyqtSignal(str, str)
+    entry_restore_requested = pyqtSignal(object)
     changed = pyqtSignal()
 
     def __init__(self, translator: Translator, storage: AppStorage, parent=None):
@@ -181,6 +191,11 @@ class HistoryPanel(QWidget):
         self._list_layout.insertWidget(0, self._empty_label)
 
     def set_entries(self, entries: list[HistoryEntry]):
+        for item in list(self._items):
+            self._list_layout.removeWidget(item)
+            item.deleteLater()
+        self._items.clear()
+        self._empty_label.setVisible(not entries)
         for e in entries:
             self._add_item(e, save=False)
 
@@ -191,6 +206,8 @@ class HistoryPanel(QWidget):
         self._empty_label.hide()
         item = _HistoryItem(entry, self._t, self._scroll_content)
         item.clicked.connect(lambda e: self.entry_selected.emit(e.output_text))
+        item.fill_requested.connect(self.entry_fill_requested.emit)
+        item.restore_requested.connect(self.entry_restore_requested.emit)
         self._items.insert(0, item)
         self._list_layout.insertWidget(0, item)
         if save:
@@ -222,4 +239,6 @@ class HistoryPanel(QWidget):
             item.apply_theme()
 
     def retranslate_ui(self):
-        pass  # Labels set at construction, recreated on language change
+        self._title.setText(self._t.t("history_panel"))
+        self._clear_btn.setToolTip(self._t.t("history_clear"))
+        self._empty_label.setText(self._t.t("history_empty"))

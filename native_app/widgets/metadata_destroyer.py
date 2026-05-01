@@ -33,9 +33,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
+from ..file_filters import image_filter, png_filter
 from ..metadata import MetadataWriter
-from ..theme import _fs, current_palette, is_theme_light
+from ..theme import _fs, current_palette
 from ..ui_tokens import CLS_METADATA_FRAME, CLS_METADATA_RESULT_ITEM, CLS_METADATA_STATUS_OK, _dp
+from .text_context_menu import apply_app_menu_style, install_localized_context_menus
 
 
 def _palette() -> dict[str, str]:
@@ -119,7 +121,7 @@ class _ResultRow(QWidget):
             row.addWidget(QLabel(f"\u2717 {filename} \u2014 {error}", self), 1)
         else:
             lbl = QLabel(f"\u2713 {filename}", self)
-            ok_color = '#3a8a48' if is_theme_light() else '#5c5'
+            ok_color = current_palette()['accent_text']
             lbl.setStyleSheet(f"color: {ok_color};")
             row.addWidget(lbl, 1)
             copy_btn = QPushButton(translator.t("metadata_copy_file"), self)
@@ -144,7 +146,7 @@ class _ResultRow(QWidget):
             return
         dst, _ = QFileDialog.getSaveFileName(
             self, self._translator.t("metadata_save_as"),
-            os.path.basename(self._dst_path), "PNG (*.png);;All (*)",
+            os.path.basename(self._dst_path), png_filter(self._translator, all_files=True),
         )
         if dst:
             shutil.copy2(self._dst_path, dst)
@@ -161,7 +163,7 @@ class MetadataDestroyerWidget(QWidget):
 
     changed = pyqtSignal()
     error_occurred = pyqtSignal(str, str)
-    _edit_destroy_preset_requested = pyqtSignal()
+    edit_destroy_preset_requested = pyqtSignal()
 
     def __init__(self, translator: Translator, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -181,6 +183,10 @@ class MetadataDestroyerWidget(QWidget):
         self._edit_lora_rows: list[tuple[QWidget, QLineEdit, QDoubleSpinBox]] = []
 
         self._build_ui()
+
+    def set_destroy_text(self, text: str | None) -> None:
+        """Set the metadata text used by destroy mode; None means use defaults."""
+        self._destroy_text = text if text else None
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -347,6 +353,7 @@ class MetadataDestroyerWidget(QWidget):
 
     def _show_single_menu(self, pos) -> None:
         menu = QMenu(self)
+        apply_app_menu_style(menu)
         if self._single_dst and os.path.isfile(self._single_dst):
             save_action = menu.addAction(self._translator.t("metadata_save_as"))
             copy_action = menu.addAction(self._translator.t("metadata_copy_file"))
@@ -358,6 +365,7 @@ class MetadataDestroyerWidget(QWidget):
             edit_preset_action = None
         else:
             edit_sub = menu.addMenu(self._translator.t("metadata_edit_mode"))
+            apply_app_menu_style(edit_sub)
             mode_action = edit_sub.addAction(self._translator.t("metadata_edit_single"))
             edit_preset_action = edit_sub.addAction(self._translator.t("metadata_edit_preset"))
 
@@ -367,7 +375,7 @@ class MetadataDestroyerWidget(QWidget):
         if action == save_action:
             dst, _ = QFileDialog.getSaveFileName(
                 self, self._translator.t("metadata_save_as"),
-                self._single_src_name, "PNG (*.png);;All (*)",
+                self._single_src_name, png_filter(self._translator, all_files=True),
             )
             if dst:
                 shutil.copy2(self._single_dst, dst)
@@ -388,7 +396,7 @@ class MetadataDestroyerWidget(QWidget):
                 if self._single_src:
                     self._enter_edit_mode()
         elif action == edit_preset_action:
-            self._edit_destroy_preset_requested.emit()
+            self.edit_destroy_preset_requested.emit()
 
     def _enter_edit_mode(self) -> None:
         """Show editable metadata fields for the source image."""
@@ -527,6 +535,7 @@ class MetadataDestroyerWidget(QWidget):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.clicked.connect(self._save_edited)
         self._results_layout.insertWidget(4, save_btn)
+        install_localized_context_menus(self._results_content, self._translator)
 
     def _add_lora_row(self, name: str, weight: str) -> None:
         row = QWidget(self._results_content)
@@ -550,6 +559,7 @@ class MetadataDestroyerWidget(QWidget):
         self._edit_lora_rows.append((row, name_edit, weight_spin))
         insert_at = max(0, self._lora_layout.count() - 1) if hasattr(self, "_lora_layout") else 0
         self._lora_layout.insertWidget(insert_at, row)
+        install_localized_context_menus(row, self._translator)
 
     def _remove_lora_row(self, row: QWidget) -> None:
         self._edit_lora_rows = [item for item in self._edit_lora_rows if item[0] is not row]
@@ -577,7 +587,7 @@ class MetadataDestroyerWidget(QWidget):
         dst, _ = QFileDialog.getSaveFileName(
             self, self._translator.t("metadata_save_copy"),
             os.path.splitext(self._single_src_name)[0] + "_edited.png",
-            "PNG (*.png)",
+            png_filter(self._translator, all_files=False),
         )
         if dst:
             self._writer.edit(self._single_src, dst, self._edit_meta)
@@ -643,7 +653,7 @@ class MetadataDestroyerWidget(QWidget):
     def _pick_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, self._translator.t("select_image"), "",
-            "Images (*.png *.jpg *.jpeg *.webp *.bmp)",
+            image_filter(self._translator),
         )
         if paths:
             self.process_files(paths)

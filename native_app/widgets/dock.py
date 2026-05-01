@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QBoxLayout, QFrame, QMenu, QPushButton, QWidget
 
 from ..models import DockPosition, DockState
 from .common import compute_resized_rect
+from .text_context_menu import apply_app_menu_style
 from ..ui_tokens import (
     DOCK_COLLAPSED_MAX_SIDE,
     DOCK_COLLAPSED_MAX_TOP,
@@ -52,10 +53,14 @@ class DockItemButton(QPushButton):
 
     def refresh_text(self, expanded: bool, floating: bool) -> None:
         self.setText(f'{self.icon_text}  {self.label_text}' if expanded or floating else self.icon_text)
+        self.setToolTip(self.label_text)
 
     def _show_context_menu(self, pos: QPoint) -> None:
+        if not self._close_label:
+            return
         menu = QMenu(self)
-        close_action = menu.addAction(self._close_label or '关闭')
+        apply_app_menu_style(menu)
+        close_action = menu.addAction(self._close_label)
         chosen = menu.exec(self.mapToGlobal(pos))
         if chosen is close_action:
             self.close_requested.emit(self.widget_id)
@@ -109,6 +114,7 @@ class DockPanel(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
         self._state = DockState(
+            expanded=True,
             collapsed_thickness=DOCK_COLLAPSED_THICKNESS,
             expanded_vertical_size=DOCK_EXPANDED_SIDE,
             expanded_horizontal_size=DOCK_EXPANDED_TOP,

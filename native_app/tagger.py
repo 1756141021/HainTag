@@ -144,7 +144,11 @@ class TaggerEngine:
     @property
     def is_ready(self) -> bool:
         if self._use_subprocess:
-            return self._model_path is not None and self._mapping_path is not None
+            return (
+                self._model_path is not None
+                and self._mapping_path is not None
+                and bool(self._external_python)
+            )
         return self._session is not None and self._mapping is not None
 
     def model_paths(self, base_dir: str | None = None) -> tuple[str | None, str | None]:
@@ -194,6 +198,19 @@ class TaggerEngine:
         """
         self._model_path = model_path
         self._mapping_path = mapping_path
+
+        if external_python:
+            self._external_python = external_python
+            self._use_subprocess = True
+            self._mapping = TagMapping(mapping_path)
+            return
+
+        if sys.version_info >= (3, 14):
+            # onnxruntime can hard-crash the host process on unsupported
+            # interpreters, so avoid importing it during startup.
+            self._use_subprocess = True
+            self._mapping = TagMapping(mapping_path)
+            return
 
         try:
             import onnxruntime as _ort

@@ -42,6 +42,7 @@ class Workspace(QWidget):
     def set_background_image(self, path: str, blur: int = 30, opacity: int = 40, brightness: int = 50) -> None:
         """Set a background image with blur, opacity (0-100), and brightness (0-100)."""
         self._bg_opacity = max(0, min(100, opacity)) / 100.0
+        self._bg_brightness = max(0, min(100, brightness)) / 100.0
         if not path or not Path(path).exists():
             self._bg_pixmap = None
             self.update()
@@ -52,11 +53,12 @@ class Workspace(QWidget):
                 self._bg_pixmap = None
                 self.update()
                 return
-            # Apply blur using Pillow (resize down → blur → resize up)
+            # Apply background image effects through the same settings exposed in the UI.
             blur_radius = max(0, min(100, blur))
-            if blur_radius > 0:
+            brightness_factor = 0.15 + self._bg_brightness * 1.7
+            if blur_radius > 0 or abs(brightness_factor - 1.0) > 0.01:
                 try:
-                    from PIL import Image, ImageFilter
+                    from PIL import Image, ImageEnhance, ImageFilter
                     # Scale down for fast blur
                     small_w = max(1, pixmap.width() // 4)
                     small_h = max(1, pixmap.height() // 4)
@@ -65,7 +67,10 @@ class Workspace(QWidget):
                     ptr = img.bits()
                     ptr.setsize(img.sizeInBytes())
                     pil_img = Image.frombytes('RGBA', (img.width(), img.height()), bytes(ptr))
-                    pil_img = pil_img.filter(ImageFilter.GaussianBlur(radius=blur_radius // 2 + 1))
+                    if blur_radius > 0:
+                        pil_img = pil_img.filter(ImageFilter.GaussianBlur(radius=blur_radius // 2 + 1))
+                    if abs(brightness_factor - 1.0) > 0.01:
+                        pil_img = ImageEnhance.Brightness(pil_img).enhance(brightness_factor)
                     data = pil_img.tobytes()
                     result = QImage(data, pil_img.width, pil_img.height, QImage.Format.Format_RGBA8888).copy()
                     pixmap = QPixmap.fromImage(result)

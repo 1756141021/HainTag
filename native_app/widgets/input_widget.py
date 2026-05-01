@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLa
 
 from ..i18n import Translator
 from ..models import SEND_MODE_CTRL_ENTER, SEND_MODE_ENTER
-from ..theme import is_theme_light
+from ..theme import _fs, current_palette
 from ..ui_tokens import CLS_FIELD_LABEL, CLS_INPUT_EDITOR, INPUT_ACTION_BUTTON, _dp
 
 
@@ -25,13 +25,14 @@ class InputWidget(QWidget):
 
         self.editor = QTextEdit(self)
         self.editor.setProperty('class', CLS_INPUT_EDITOR)
+        self.editor.setObjectName("WorkbenchInputEditor")
         root.addWidget(self.editor, 1)
 
         self.action_bar = QWidget(self)
-        self.action_bar.setObjectName('InputActionBar')
+        self.action_bar.setObjectName('WorkbenchFooter')
         footer = QHBoxLayout(self.action_bar)
-        footer.setContentsMargins(_dp(10), _dp(6), _dp(10), _dp(10))
-        footer.setSpacing(_dp(6))
+        footer.setContentsMargins(_dp(16), _dp(10), _dp(16), _dp(12))
+        footer.setSpacing(_dp(8))
 
         self.token_label = QLabel(self.action_bar)
         self.token_label.setObjectName('TokenLabel')
@@ -40,17 +41,18 @@ class InputWidget(QWidget):
         footer.addStretch(1)
 
         self.summary_button = QPushButton(self.action_bar)
-        self.summary_button.setObjectName('SecondaryIconButton')
-        self.summary_button.setFixedSize(_dp(INPUT_ACTION_BUTTON), _dp(INPUT_ACTION_BUTTON))
+        self.summary_button.setObjectName('WorkbenchFooterButton')
+        self.summary_button.setFixedSize(_dp(30), _dp(28))
         footer.addWidget(self.summary_button)
 
         self.send_button = QPushButton(self.action_bar)
-        self.send_button.setObjectName('PrimaryIconButton')
-        self.send_button.setFixedSize(_dp(INPUT_ACTION_BUTTON), _dp(INPUT_ACTION_BUTTON))
+        self.send_button.setObjectName('WorkbenchPrimaryButton')
+        self.send_button.setFixedSize(_dp(30), _dp(28))
         footer.addWidget(self.send_button)
 
         root.addWidget(self.action_bar, 0)
         self.retranslate_ui()
+        self.apply_workbench_style()
 
     def retranslate_ui(self) -> None:
         self.editor.setPlaceholderText(self._translator.t('input_placeholder'))
@@ -61,6 +63,7 @@ class InputWidget(QWidget):
         self.send_button.setToolTip(f"{send_tooltip} ({self.send_shortcut_label()})" if not self._sending else send_tooltip)
         if not self.token_label.text():
             self.token_label.setText(f"~0 / 2048 {self._translator.t('token_count')}")
+        self.apply_workbench_style()
 
     def set_sending(self, sending: bool) -> None:
         self._sending = sending
@@ -139,11 +142,30 @@ class InputWidget(QWidget):
     def set_token_estimate(self, estimated_tokens: int, max_tokens: int) -> None:
         self.token_label.setText(f"~{estimated_tokens} / {max_tokens} {self._translator.t('token_count')}")
         ratio = (estimated_tokens / max_tokens) if max_tokens else 0.0
-        light = is_theme_light()
         if ratio > 0.95:
-            color = '#cc4444' if light else '#ff7676'
+            color = current_palette()["close_hover"]
         elif ratio > 0.8:
-            color = '#cc8800' if light else '#ffcc66'
+            color = current_palette()["accent_handle"]
         else:
             color = None
-        self.token_label.setStyleSheet(f'color: {color};' if color else '')
+        p = current_palette()
+        self.token_label.setStyleSheet(
+            f"color: {color or p['text_muted']}; font-size: {_fs('fs_12')};"
+        )
+
+    def apply_workbench_style(self) -> None:
+        p = current_palette()
+        self.setStyleSheet(
+            f"InputWidget {{ background: {p['bg_card_strip']}; }}"
+            f"QTextEdit#WorkbenchInputEditor {{ background: {p['bg_input']}; color: {p['text']}; border: 1px solid {p['line']}; "
+            f"border-radius: {_dp(4)}px; padding: {_dp(10)}px {_dp(12)}px; selection-background-color: {p['selection_bg']}; "
+            f"font-size: {_fs('fs_12')}; }}"
+            f"QTextEdit#WorkbenchInputEditor:focus {{ border-color: {p['line_strong']}; }}"
+            f"QWidget#WorkbenchFooter {{ background: {p['bg_card_strip']}; }}"
+            f"QLabel#TokenLabel {{ color: {p['text_muted']}; font-size: {_fs('fs_12')}; }}"
+            f"QPushButton#WorkbenchFooterButton {{ background: {p['bg_surface']}; color: {p['text']}; border: 1px solid {p['line_hover']}; border-radius: {_dp(4)}px; }}"
+            f"QPushButton#WorkbenchFooterButton:hover {{ background: {p['hover_bg_strong']}; }}"
+            f"QPushButton#WorkbenchFooterButton:disabled {{ color: {p['disabled_text']}; background: {p['disabled_bg']}; }}"
+            f"QPushButton#WorkbenchPrimaryButton {{ background: {p['accent']}; color: {p['accent_text']}; border: 1px solid {p['accent_hover']}; border-radius: {_dp(4)}px; }}"
+            f"QPushButton#WorkbenchPrimaryButton:hover {{ background: {p['accent_hover']}; }}"
+        )

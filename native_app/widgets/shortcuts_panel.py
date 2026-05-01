@@ -120,7 +120,7 @@ class ShortcutsPanel(QWidget):
                 key_label.setStyleSheet(
                     f"background: {p['bg_content']}; color: {p['text']}; "
                     f"border: 1px solid {p['line']}; border-radius: 3px; "
-                    f"padding: 2px 8px; font-size: {_fs('fs_10')}; font-family: monospace;"
+                    f"padding: 2px 8px; font-size: {_fs('fs_10')};"
                 )
                 row.addWidget(key_label)
 

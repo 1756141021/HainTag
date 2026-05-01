@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 from ..i18n import Translator
 from ..theme import _fs, current_palette
 from ..ui_tokens import _dp
+from .text_context_menu import install_localized_context_menus
 
 
 class DestroyTemplateEditor(QDialog):
@@ -70,7 +71,7 @@ class DestroyTemplateEditor(QDialog):
         self._list.currentRowChanged.connect(self._on_select)
         left.addWidget(self._list, 1)
 
-        del_btn = QPushButton(translator.t("delete") if hasattr(translator, 'delete') else "删除", self)
+        del_btn = QPushButton(translator.t("delete"), self)
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setStyleSheet(
             f"background: {p['delete_hover']}; color: {p['text']}; "
@@ -85,7 +86,7 @@ class DestroyTemplateEditor(QDialog):
         right = QVBoxLayout()
         right.setSpacing(_dp(8))
 
-        name_label = QLabel("名称", self)
+        name_label = QLabel(translator.t("metadata_template_name"), self)
         name_label.setStyleSheet(f"font-size: {_fs('fs_10')}; color: {p['text_dim']};")
         right.addWidget(name_label)
 
@@ -98,7 +99,7 @@ class DestroyTemplateEditor(QDialog):
         self._name_edit.textChanged.connect(self._on_name_changed)
         right.addWidget(self._name_edit)
 
-        text_label = QLabel("销毁填充文本", self)
+        text_label = QLabel(translator.t("metadata_destroy_fill_text"), self)
         text_label.setStyleSheet(f"font-size: {_fs('fs_10')}; color: {p['text_dim']};")
         right.addWidget(text_label)
 
@@ -143,6 +144,7 @@ class DestroyTemplateEditor(QDialog):
         self._populate_list()
         if 0 <= active_index < len(self._templates):
             self._list.setCurrentRow(active_index)
+        install_localized_context_menus(self, translator)
 
     def _populate_list(self):
         self._populating = True

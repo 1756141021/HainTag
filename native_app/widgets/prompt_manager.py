@@ -36,6 +36,7 @@ from ..ui_tokens import (
     _dp,
 )
 from .common import DragHandleLabel, ToggleSwitch
+from .text_context_menu import install_localized_context_menus
 
 
 class PromptEntryWidget(QFrame):
@@ -177,6 +178,7 @@ class PromptEntryWidget(QFrame):
             widget.installEventFilter(self)
         self.set_entry(entry)
         self.set_expanded(False)
+        install_localized_context_menus(self, translator)
 
     def eventFilter(self, watched, event) -> bool:
         if event.type() != QEvent.Type.MouseButtonPress:
@@ -459,5 +461,4 @@ class PromptManagerWidget(QWidget):
         self.add_button.setText(self._translator.t("add_prompt"))
         self.preview_button.setToolTip(self._translator.t("prompt_preview"))
         self.list_widget.retranslate_ui()
-
 

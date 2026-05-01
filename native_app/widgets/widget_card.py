@@ -31,10 +31,13 @@ class WidgetCard(QFrame):
         self._dragging = False
         self._resizing = False
         self._resize_direction = ""
-        self._drag_strip_height = 36
+        self._drag_strip_height = _dp(36)
         self._pinned = False
-        self._pin_on_title = "开启置顶"
-        self._pin_off_title = "取消顶置"
+        self._plain_pin_icons = False
+        self._pin_on_title = ""
+        self._pin_off_title = ""
+        self._dock_back_title = ""
+        self._dock_close_title = ""
         self._floating = False
         self._workspace_parent = None
 
@@ -76,8 +79,10 @@ class WidgetCard(QFrame):
         self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pin_btn.setFixedSize(_dp(24), _dp(24))
         self._pin_btn.setFlat(True)
-        self._pin_btn.setToolTip("Pin")
+        self._pin_btn.setToolTip("")
         self._pin_btn.clicked.connect(lambda: self._toggle_pin())
+        self._title_action_widgets: list[QWidget] = []
+        self._title_extra_widget: QWidget | None = None
 
         self._resize_handle = QPushButton("◢", self)
         self._resize_handle.setObjectName("WidgetResizeHandle")
@@ -126,13 +131,52 @@ class WidgetCard(QFrame):
                 old_widget.setParent(None)
         self._content_layout.addWidget(widget)
 
+    def set_content_margins(self, left: int, top: int | None = None, right: int | None = None, bottom: int | None = None) -> None:
+        """Override inner content margins while keeping the title strip reserved."""
+        top = self._drag_strip_height if top is None else top
+        right = left if right is None else right
+        bottom = left if bottom is None else bottom
+        self._content_layout.setContentsMargins(left, top, right, bottom)
+
+    def add_title_action_widget(self, widget: QWidget) -> None:
+        """Place a small control in the card title bar before pin/close buttons."""
+        if widget in self._title_action_widgets:
+            return
+        widget.setParent(self._drag_strip)
+        self._title_action_widgets.append(widget)
+        widget.show()
+        self._layout_title_action_widgets()
+
+    def set_title_extra_widget(self, widget: QWidget | None) -> None:
+        """Place a titlebar widget directly after the title text."""
+        if self._title_extra_widget is widget:
+            return
+        if self._title_extra_widget is not None:
+            self._title_extra_widget.setParent(None)
+        self._title_extra_widget = widget
+        if widget is not None:
+            widget.setParent(self._drag_strip)
+            widget.show()
+        self._layout_title_extra_widget()
+
+    def set_workbench_chrome(self, enabled: bool = True) -> None:
+        """Use the flat v3 workbench chrome for this card only."""
+        self._plain_pin_icons = enabled
+        if enabled:
+            self._grip.setText("⠿")
+            self._grip.setFixedSize(_dp(28), _dp(28))
+        self._update_pin_style()
+        self.updateGeometry()
+
     def retranslate_ui(
         self,
         grip_title: str,
         resize_title: str,
         close_title: str = "",
-        pin_on_title: str = "开启置顶",
-        pin_off_title: str = "取消顶置",
+        pin_on_title: str = "",
+        pin_off_title: str = "",
+        dock_back_title: str = "",
+        dock_close_title: str = "",
     ) -> None:
         self._drag_strip.setToolTip(grip_title)
         self._grip.setToolTip(grip_title)
@@ -141,6 +185,8 @@ class WidgetCard(QFrame):
             self._close_btn.setToolTip(close_title)
         self._pin_on_title = pin_on_title
         self._pin_off_title = pin_off_title
+        self._dock_back_title = dock_back_title
+        self._dock_close_title = dock_close_title
         self._pin_btn.setToolTip(self._pin_off_title if self._pinned else self._pin_on_title)
 
     def resize_hotspot_rects(self) -> list[QRect]:
@@ -165,14 +211,26 @@ class WidgetCard(QFrame):
         return super().eventFilter(watched, event)
 
     def _handle_drag_event(self, watched, event) -> bool:
+        def _inside_title_extra(widget: QWidget | None) -> bool:
+            extra = self._title_extra_widget
+            while widget is not None and widget is not self._drag_strip:
+                if widget is extra:
+                    return True
+                widget = widget.parentWidget()
+            return False
+
         if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.RightButton:
+            if watched is self._drag_strip and _inside_title_extra(self._drag_strip.childAt(event.position().toPoint())):
+                return False
             from PyQt6.QtWidgets import QMenu
+            from .text_context_menu import apply_app_menu_style
             menu = QMenu(self)
+            apply_app_menu_style(menu)
             if self._floating:
-                back_action = menu.addAction("↩ 收回工作区")
+                back_action = menu.addAction("↩ " + self._dock_back_title)
             else:
                 back_action = None
-            close_action = menu.addAction("✕ 收纳")
+            close_action = menu.addAction("✕ " + self._dock_close_title)
             chosen = menu.exec(event.globalPosition().toPoint())
             if chosen is close_action:
                 if self._floating and self._workspace_parent:
@@ -187,6 +245,8 @@ class WidgetCard(QFrame):
             if watched is self._drag_strip:
                 child = self._drag_strip.childAt(local_pos)
                 if child is self._pin_btn or child is self._close_btn:
+                    return False
+                if _inside_title_extra(child):
                     return False
             self.raise_()
             self._dragging = True
@@ -258,16 +318,31 @@ class WidgetCard(QFrame):
 
     def _update_pin_style(self) -> None:
         p = current_palette()
+        if self._plain_pin_icons:
+            color = p['accent_text'] if self._pinned else p['text_muted']
+            bg = p['accent'] if self._pinned else 'transparent'
+            self._pin_btn.setStyleSheet(
+                f"color: {color}; background: {bg}; border: none; border-radius: {_dp(3)}px; padding: 0 {_dp(4)}px; font-size: {_fs('fs_12')};"
+            )
+            self._close_btn.setStyleSheet(
+                f"color: {p['text_muted']}; background: transparent; border: none; border-radius: {_dp(3)}px; font-size: {_fs('fs_12')};"
+            )
+            self._pin_btn.setText('●' if self._pinned else '○')
+            self._pin_btn.setToolTip(self._pin_off_title if self._pinned else self._pin_on_title)
+            return
         color = p['accent_text'] if self._pinned else p['text_dim']
         bg = p['accent'] if self._pinned else 'transparent'
         border = p['accent'] if self._pinned else 'transparent'
         self._pin_btn.setStyleSheet(
-            f"color: {color}; background: {bg}; border: 1px solid {border}; border-radius: 4px; padding: 0 4px; font-size: {_fs('fs_12')};"
+            f"color: {color}; background: {bg}; border: 1px solid {border}; border-radius: {_dp(4)}px; padding: 0 {_dp(4)}px; font-size: {_fs('fs_12')};"
         )
         self._close_btn.setStyleSheet(
             f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
         )
-        self._pin_btn.setText('📌' if self._pinned else '📍')
+        if self._plain_pin_icons:
+            self._pin_btn.setText('●' if self._pinned else '○')
+        else:
+            self._pin_btn.setText('📌' if self._pinned else '📍')
         self._pin_btn.setToolTip(self._pin_off_title if self._pinned else self._pin_on_title)
 
     def _toggle_pin(self) -> None:
@@ -280,6 +355,9 @@ class WidgetCard(QFrame):
             self.show()
         elif self._pinned:
             self.raise_()
+
+    def toggle_pin(self) -> None:
+        self._toggle_pin()
 
     @property
     def is_pinned(self) -> bool:
@@ -308,7 +386,7 @@ class WidgetCard(QFrame):
         self._update_pin_style()
         self.floated.emit(self.widget_id)
 
-    def float_back(self, parent: QWidget) -> None:
+    def float_back(self, parent: QWidget, *, show: bool = True) -> None:
         """Re-attach to the workspace as a child widget."""
         if not self._floating:
             return
@@ -318,7 +396,7 @@ class WidgetCard(QFrame):
         self.setParent(parent)
         self.setWindowFlags(Qt.WindowType.Widget)
         self.resize(size)
-        self.show()
+        self.setVisible(show)
         # Re-raise drag strip and resize handles after reparent (z-order resets)
         self._drag_strip.raise_()
         for handle in self._resize_handles.values():
@@ -358,10 +436,14 @@ class WidgetCard(QFrame):
         title_x = self._grip.width() + 4
         btn_area = self._close_btn.width() + self._pin_btn.width() + 12
         title_w = self.width() - title_x - btn_area
-        self._title_label.setGeometry(title_x, 0, max(0, title_w), self._drag_strip.height())
+        self._title_label.adjustSize()
+        label_w = min(max(_dp(46), self._title_label.sizeHint().width() + _dp(8)), max(0, title_w))
+        self._title_label.setGeometry(title_x, 0, label_w, self._drag_strip.height())
         cy = max(0, (self._drag_strip.height() - self._close_btn.height()) // 2)
         self._close_btn.move(self.width() - self._close_btn.width() - self._pin_btn.width() - 8, cy)
         self._pin_btn.move(self.width() - self._pin_btn.width() - 6, cy)
+        self._layout_title_extra_widget()
+        self._layout_title_action_widgets()
 
         edge = WIDGET_RESIZE_EDGE
         corner = WIDGET_RESIZE_CORNER
@@ -384,3 +466,26 @@ class WidgetCard(QFrame):
             handle.raise_()
         self._resize_handle.raise_()
         super().resizeEvent(event)
+
+    def _layout_title_action_widgets(self) -> None:
+        x = self._close_btn.x() - _dp(4)
+        for widget in reversed(self._title_action_widgets):
+            if widget is None:
+                continue
+            x -= widget.width()
+            cy = max(0, (self._drag_strip.height() - widget.height()) // 2)
+            widget.move(max(self._grip.width() + _dp(8), x), cy)
+            widget.raise_()
+            x -= _dp(4)
+
+    def _layout_title_extra_widget(self) -> None:
+        widget = self._title_extra_widget
+        if widget is None:
+            return
+        left = self._title_label.x() + self._title_label.width() + _dp(4)
+        right = self._close_btn.x() - _dp(8)
+        width = max(0, min(widget.sizeHint().width(), right - left))
+        height = min(widget.sizeHint().height(), self._drag_strip.height() - _dp(6))
+        cy = max(0, (self._drag_strip.height() - height) // 2)
+        widget.setGeometry(left, cy, width, height)
+        widget.raise_()

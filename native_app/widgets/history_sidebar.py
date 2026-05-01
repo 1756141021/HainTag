@@ -21,6 +21,7 @@ from ..models import HistoryEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
 from ..ui_tokens import _dp
+from .text_context_menu import apply_app_menu_style
 
 
 def _entry_datetime(entry: HistoryEntry) -> datetime | None:
@@ -84,16 +85,18 @@ class _HistoryTextBlock(QWidget):
         )
         self._copy_btn.setStyleSheet(
             f"color: {p['text']}; background: {p['accent']}; border: none; "
-            f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
+            f"border-radius: {_dp(3)}px; padding: {_dp(3)}px {_dp(10)}px; font-size: {_fs('fs_9')};"
         )
         self._editor.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_10')}; background: {p['bg_card']}; "
-            f"border: 1px solid {p['line']}; border-radius: 4px; padding: 4px;"
+            f"border: 1px solid {p['line']}; border-radius: {_dp(4)}px; padding: {_dp(4)}px;"
         )
 
 
 class _HistorySidebarItem(QWidget):
+    output_selected = pyqtSignal(str)
     fill_requested = pyqtSignal(str, str)
+    restore_requested = pyqtSignal(object)
 
     def __init__(self, entry: HistoryEntry, translator: Translator, parent=None):
         super().__init__(parent)
@@ -172,6 +175,10 @@ class _HistorySidebarItem(QWidget):
             lambda: self.fill_requested.emit(self._entry.output_text, self._entry.nochar_text)
         )
         action_row.addWidget(self._fill_btn)
+        self._restore_btn = QPushButton(self._t.t("history_restore_workbench"), self._body)
+        self._restore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._restore_btn.clicked.connect(lambda: self.restore_requested.emit(self._entry))
+        action_row.addWidget(self._restore_btn)
         body_layout.addLayout(action_row)
 
         self.layout().addWidget(self._body)
@@ -193,7 +200,10 @@ class _HistorySidebarItem(QWidget):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
+        apply_app_menu_style(menu)
         fill_act = menu.addAction(self._t.t("history_fill_output"))
+        restore_act = menu.addAction(self._t.t("history_restore_workbench"))
+        menu.addSeparator()
         copy_input = menu.addAction(self._t.t("history_copy_input"))
         copy_full = menu.addAction(self._t.t("history_copy_output"))
         copy_nochar = None
@@ -202,6 +212,8 @@ class _HistorySidebarItem(QWidget):
         chosen = menu.exec(event.globalPos())
         if chosen == fill_act:
             self.fill_requested.emit(self._entry.output_text, self._entry.nochar_text)
+        elif chosen == restore_act:
+            self.restore_requested.emit(self._entry)
         elif chosen == copy_input:
             QApplication.clipboard().setText(self._entry.input_text)
         elif chosen == copy_full:
@@ -211,6 +223,13 @@ class _HistorySidebarItem(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= self._header.height():
+            if event.position().x() <= _dp(28):
+                self.toggle()
+                return
+            self.output_selected.emit(self._entry.output_text)
+            self.restore_requested.emit(self._entry)
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
             self.toggle()
             return
         super().mousePressEvent(event)
@@ -237,6 +256,8 @@ class _HistorySidebarItem(QWidget):
             self._nochar_block.set_copy_label(self._t.t("copy"))
         if hasattr(self, "_fill_btn"):
             self._fill_btn.setText(self._t.t("history_fill_output"))
+        if hasattr(self, "_restore_btn"):
+            self._restore_btn.setText(self._t.t("history_restore_workbench"))
 
     def apply_theme(self) -> None:
         p = current_palette()
@@ -245,7 +266,7 @@ class _HistorySidebarItem(QWidget):
         self._ts_label.setStyleSheet(f"color: {p['text_dim']}; font-size: {_fs('fs_9')};")
         self._model_label.setStyleSheet(
             f"color: {p['accent_text']}; font-size: {_fs('fs_9')}; background: {p['accent']}; "
-            f"border-radius: 2px; padding: 0 4px;"
+            f"border-radius: {_dp(2)}px; padding: 0 {_dp(4)}px;"
         )
         self._preview_label.setStyleSheet(f"color: {p['text']}; font-size: {_fs('fs_9')};")
         if self._input_block is not None:
@@ -257,16 +278,24 @@ class _HistorySidebarItem(QWidget):
         if hasattr(self, "_fill_btn"):
             self._fill_btn.setStyleSheet(
                 f"color: {p['text']}; background: {p['accent']}; border: none; "
-                f"border-radius: 3px; padding: 3px 10px; font-size: {_fs('fs_9')};"
+                f"border-radius: {_dp(3)}px; padding: {_dp(3)}px {_dp(10)}px; font-size: {_fs('fs_9')};"
+            )
+        if hasattr(self, "_restore_btn"):
+            self._restore_btn.setStyleSheet(
+                f"color: {p['text_dim']}; background: {p['bg_surface']}; border: 1px solid {p['line']}; "
+                f"border-radius: {_dp(3)}px; padding: {_dp(3)}px {_dp(10)}px; font-size: {_fs('fs_9')};"
             )
 
 
 class HistorySidebar(QWidget):
     EXPANDED_WIDTH = 320
 
+    entry_selected = pyqtSignal(str)
     entry_fill_requested = pyqtSignal(str, str)
+    entry_restore_requested = pyqtSignal(object)
     changed = pyqtSignal()
     width_changed = pyqtSignal(int)
+    close_requested = pyqtSignal()
 
     def __init__(self, translator: Translator, storage: AppStorage, parent=None):
         super().__init__(parent)
@@ -289,11 +318,16 @@ class HistorySidebar(QWidget):
         self._title = QLabel(header)
         header_layout.addWidget(self._title)
         header_layout.addStretch()
-        self._clear_btn = QPushButton("×", header)
+        self._clear_btn = QPushButton("⌫", header)
         self._clear_btn.setFixedSize(_dp(20), _dp(20))
         self._clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._clear_btn.clicked.connect(self._clear_all)
         header_layout.addWidget(self._clear_btn)
+        self._close_btn = QPushButton("×", header)
+        self._close_btn.setFixedSize(_dp(20), _dp(20))
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.clicked.connect(self.close_requested.emit)
+        header_layout.addWidget(self._close_btn)
         root.addWidget(header)
 
         self._scroll = QScrollArea(self)
@@ -314,7 +348,7 @@ class HistorySidebar(QWidget):
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._list_layout.insertWidget(0, self._empty_label)
 
-        self.setFixedWidth(self.EXPANDED_WIDTH)
+        self.setFixedWidth(_dp(self.EXPANDED_WIDTH))
         self.retranslate_ui()
         self.apply_theme()
 
@@ -363,7 +397,9 @@ class HistorySidebar(QWidget):
                 header.setObjectName("HistoryGroupHeader")
                 self._list_layout.insertWidget(self._list_layout.count() - 1, header)
             item = _HistorySidebarItem(entry, self._t, self._scroll_content)
+            item.output_selected.connect(self.entry_selected.emit)
             item.fill_requested.connect(self.entry_fill_requested.emit)
+            item.restore_requested.connect(self.entry_restore_requested.emit)
             self._items.append(item)
             self._list_layout.insertWidget(self._list_layout.count() - 1, item)
         self.apply_theme()
@@ -380,7 +416,7 @@ class HistorySidebar(QWidget):
     def animate_show(self):
         self.show()
         self.raise_()
-        self._animate_width(0, self.EXPANDED_WIDTH)
+        self._animate_width(0, _dp(self.EXPANDED_WIDTH))
 
     def animate_hide(self, on_finish=None):
         def _done():
@@ -389,7 +425,7 @@ class HistorySidebar(QWidget):
             if on_finish is not None:
                 on_finish()
 
-        self._animate_width(self.EXPANDED_WIDTH, 0, on_finish=_done)
+        self._animate_width(_dp(self.EXPANDED_WIDTH), 0, on_finish=_done)
 
     def _animate_width(self, start: int, end: int, on_finish=None):
         anim = QPropertyAnimation(self, b"maximumWidth", self)
@@ -413,6 +449,7 @@ class HistorySidebar(QWidget):
     def retranslate_ui(self):
         self._title.setText(self._t.t("history_panel"))
         self._clear_btn.setToolTip(self._t.t("history_clear"))
+        self._close_btn.setToolTip(self._t.t("close_history"))
         self._empty_label.setText(self._t.t("history_empty"))
         for item in self._items:
             item.retranslate_ui()
@@ -420,15 +457,21 @@ class HistorySidebar(QWidget):
 
     def apply_theme(self):
         p = current_palette()
+        self.setFixedWidth(_dp(self.EXPANDED_WIDTH))
+        self._clear_btn.setFixedSize(_dp(20), _dp(20))
+        self._close_btn.setFixedSize(_dp(20), _dp(20))
         self.setStyleSheet(
             f"#HistorySidebar {{ background: {p['bg']}; border-left: 1px solid {p['line_strong']}; }} "
             f"QLabel#HistoryGroupHeader {{ color: {p['text_dim']}; font-size: {_fs('fs_9')}; "
-            f"font-weight: bold; padding: 8px 10px 4px 10px; }}"
+            f"font-weight: bold; padding: {_dp(8)}px {_dp(10)}px {_dp(4)}px {_dp(10)}px; }}"
         )
         self._title.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_11')}; font-weight: bold;"
         )
         self._clear_btn.setStyleSheet(
+            f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
+        )
+        self._close_btn.setStyleSheet(
             f"color: {p['text_dim']}; background: transparent; border: none; font-size: {_fs('fs_12')};"
         )
         self._empty_label.setStyleSheet(
