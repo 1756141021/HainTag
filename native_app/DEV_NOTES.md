@@ -3,7 +3,7 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.1"`
+- 单一版本来源：`__version__ = "0.9.2"`
 - 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
 - 版本号遵循 SemVer（语义化版本）
 
@@ -78,13 +78,17 @@
 - 取消时 drain response（避免 ResponseNotRead）
 
 ## logic.py
-- `build_messages()`：把提示词 + 例图 + 用户输入组装成 API messages 数组
-- 记忆模式可接收 `history`，按 user/assistant 回合重建 turns，避免插入时拆散对话
-- depth=0 的条目视为全局前缀块；depth>0 按“距离当前输入的对话回合数”插入，而不是按裸 message 数
-- `_entry_block()` / `_history_turns()` / `_turn_insert_index()` 把消息构造拆成可复用小接口，方便后续扩展更多条目类型
-- `normalize_api_base_url()`：清理 API URL
-- `extract_active_input()`：记忆模式取全部，非记忆模式取最后一段
-- `validate_examples()`：校验例图必须同时有描述和标签
+- `build_messages()`：把提示词 + 例图 + 用户输入组装成 API messages 数组，**SillyTavern 风格深度**
+  - `depth=0` 条目落在 active_input 之后（末端，约束力最强）
+  - `depth>0` 按 `len(messages) - depth` 从末尾倒数 N 条插入
+  - 大 depth 落点会跌入历史区间时自动溢出到历史之上（above-history zone），形成顶部 system 块
+  - `history_floor` 标记历史末端，所有 depth>0 插入都受这个 floor 保护，历史块永不被切开
+  - 同 depth 内按 `order` 升序作为整块 splice
+- 记忆模式接收 `history`：原序逐条 append，过滤空内容/非法 role
+- `_entry_block()`：把 PromptEntry / OCEntry / ExampleEntry 转成 `[{role, content}, ...]` 块；OC = `user(Character: 名)` + `assistant(merged_tags)` 双消息
+- `normalize_api_base_url()`：清理 API URL，剥掉尾部 `/chat/completions`
+- `extract_active_input()`：记忆模式整段保留；非记忆模式按 `---` 切，只取最后一段
+- `validate_examples()`：例图必须同时有描述和标签
 - `estimate_text_tokens()` / `estimate_messages_tokens()`：token 估算
 
 ## theme.py
@@ -155,9 +159,11 @@
 
 ## tag_dictionary.py
 - **TagDictionary 类**：通用 Danbooru TAG 词典加载器
-- `load_csv(path)`：加载 CSV 词典（UTF-8 BOM），支持多次调用合并来源
-- `translate(tag) → str | None`：查中文翻译（O(1) dict 查询）
+- `queue_csv(path)`：**懒加载入口** —— 把 CSV 路径排进 `_lazy_paths`，不立即解析；首次 `lookup` / `search_prefix` 触发 `_ensure_loaded()` 才读盘解析。5.9 MB CSV 解析耗时 ~500 ms，靠这个把启动成本推迟到用户真正需要 tag 翻译的瞬间
+- `load_csv(path)`：传统同步加载（直接解析），与 `queue_csv` 互斥地置 `_loaded = True`
+- `translate(tag) → str | None`：查中文翻译（O(1) dict 查询，会触发懒加载）
 - `lookup(tag) → TagInfo | None`：查完整信息（翻译、分类号、使用次数、别名、大类、子类）
+- `search_prefix(prefix, limit)`：前缀模糊查询，按 count 倒序，给自动补全弹层用
 - 自动建立别名索引：查 `blueeyes` 也能命中 `blue_eyes` 的翻译
 - tag 名标准化：strip、lower、空格→下划线
 - TagInfo dataclass：name、translation、category_id、count、aliases、group、subgroup

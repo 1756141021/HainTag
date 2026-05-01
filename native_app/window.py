@@ -108,7 +108,7 @@ from .widgets.workbench_timeline import WorkbenchTimeline
 from .widgets.workspace import DockQueryResult, Workspace
 
 _CONVERSATION_HISTORY_MAX_MESSAGES = 20
-_FLOATING_TRAY_PROTECTED_WIDGET_IDS: set[str] = set()
+_FLOATING_TRAY_PROTECTED_WIDGET_IDS: set[str] = {"widget-main"}
 _FLOATING_TRAY_RESTORE_ON_PERSIST_WIDGET_IDS = {"widget-main"}
 
 if sys.platform == "win32":
@@ -518,13 +518,13 @@ class MainWindow(QWidget):
         self._floating_tray.position_changed.connect(self._schedule_save)
         self._floating_tray.close_requested.connect(self._close_floating_tray)
 
+        # Tag dictionary lazy-loads CSV on first lookup — startup stays cheap.
         self._tag_dictionary = TagDictionary()
         csv_name = 'danbooru_all_2.csv'
-        # Check dist/_internal first, then project root
         for base in [Path(sys.executable).parent, Path(__file__).resolve().parent.parent]:
             csv_path = base / csv_name
             if csv_path.exists():
-                self._tag_dictionary.load_csv(csv_path)
+                self._tag_dictionary.queue_csv(csv_path)
                 break
         self.output_widget.set_dictionary(self._tag_dictionary)
         self.interrogator_widget.set_tag_dictionary(self._tag_dictionary)
@@ -745,6 +745,7 @@ class MainWindow(QWidget):
             self._register_hints()
         # Auto update check (delayed 3s to not block startup)
         QTimer.singleShot(3000, self._check_update_auto)
+
 
     def _restore_widget_layouts(self) -> None:
         saved_widget_states = {item.widget_id: item for item in self._state.widgets}
@@ -970,9 +971,11 @@ class MainWindow(QWidget):
         )
 
     def _visible_tray_candidate_cards(self) -> list[WidgetCard]:
+        # Tray candidates must be floated OUT of the main workspace.
         return [
             card for card in self.workspace.all_cards()
             if card.isVisible()
+            and getattr(card, "_floating", False)
             and card.widget_id not in _FLOATING_TRAY_PROTECTED_WIDGET_IDS
         ]
 
@@ -987,15 +990,20 @@ class MainWindow(QWidget):
         return left_rect.adjusted(-margin, -margin, margin, margin).intersects(right_rect)
 
     def _tray_anchor_point(self, cards: list[WidgetCard], release_pos: QPoint | None = None) -> QPoint:
-        if not cards:
-            return QPoint(120, 120)
-        rects = [self._card_screen_rect(card) for card in cards]
-        group = QRect(rects[0])
-        for rect in rects[1:]:
-            group = group.united(rect)
-        if release_pos is not None and group.adjusted(-_dp(120), -_dp(120), _dp(120), _dp(120)).contains(release_pos):
-            return release_pos + QPoint(_dp(14), _dp(12))
-        return QPoint(group.right() + _dp(10), group.top())
+        # Tray must form OUTSIDE the main workbench — it's a shrink strip for
+        # auxiliary floating cards, not a panel that lives inside the workbench.
+        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else QRect(0, 0, 1280, 800)
+        tray_w = max(self._floating_tray.minimumWidth(), _dp(140))
+        gap = _dp(10)
+        main_rect = self._card_screen_rect(self.main_card) if self.main_card.isVisible() else None
+        if main_rect is not None:
+            if main_rect.right() + gap + tray_w <= avail.right():
+                return QPoint(main_rect.right() + gap, main_rect.top())
+            if main_rect.left() - gap - tray_w >= avail.left():
+                return QPoint(main_rect.left() - gap - tray_w, main_rect.top())
+        # Fall back: pin to screen right edge, top-aligned
+        return QPoint(avail.right() - tray_w - gap, avail.top() + _dp(40))
 
     def _store_card_in_tray(self, card: WidgetCard) -> bool:
         if card.widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
@@ -1164,6 +1172,10 @@ class MainWindow(QWidget):
             return
         if widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
             return
+        # Tray only operates on cards floated OUT of the main workspace.
+        # Cards still inside the workspace must never spawn a tray.
+        if not getattr(card, "_floating", False):
+            return
 
         tray_rect = self._floating_tray.frameGeometry() if self._floating_tray.isVisible() else None
         if tray_rect is not None and tray_rect.adjusted(-24, -24, 24, 24).intersects(self._card_screen_rect(card)):
@@ -1175,7 +1187,9 @@ class MainWindow(QWidget):
 
         nearby = [
             other for other in self._visible_tray_candidate_cards()
-            if other is not card and self._cards_overlap_or_near(card, other)
+            if other is not card
+            and getattr(other, "_floating", False)
+            and self._cards_overlap_or_near(card, other)
         ]
         if not nearby:
             return
@@ -3125,7 +3139,7 @@ class MainWindow(QWidget):
         sidebar = self._library_panel
         sidebar.setFixedHeight(card.height())
         anchor = getattr(self, "_sidebar_anchor_global", None)
-        if card.is_floating():
+        if card.is_floating:
             if anchor is not None:
                 sidebar.move(anchor.x(), max(0, anchor.y() - _dp(12)))
             else:
@@ -3264,7 +3278,7 @@ class MainWindow(QWidget):
         sidebar = self._history_sidebar
         sidebar.setFixedHeight(card.height())
         anchor = getattr(self, "_sidebar_anchor_global", None)
-        if card.is_floating():
+        if card.is_floating:
             if anchor is not None:
                 sidebar.move(anchor.x(), max(0, anchor.y() - _dp(12)))
             else:
@@ -3294,7 +3308,7 @@ class MainWindow(QWidget):
         if self._right_sidebar_mode and self._right_sidebar_mode != mode:
             self._close_sidebar()
         self._right_sidebar_mode = mode
-        self._reparent_sidebar_for_mode(mode, floating=self.main_card.is_floating())
+        self._reparent_sidebar_for_mode(mode, floating=self.main_card.is_floating)
         if mode == 'library':
             self._library_panel.apply_theme()
             self._library_panel.show()

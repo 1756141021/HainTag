@@ -430,7 +430,7 @@ class AppSettings:
     tag_nochar_start: str = "[NOTAGS]"
     tag_nochar_end: str = "[/NOTAGS]"
     # Defaults for new entries
-    default_example_order: int = 100
+    default_example_order: int = 50
     default_example_depth: int = 4
     default_oc_order: int = 77
     default_oc_depth: int = 4
@@ -516,7 +516,7 @@ class AppSettings:
             tag_full_end=str(data.get("tag_full_end", "[/TAGS]") or "[/TAGS]"),
             tag_nochar_start=str(data.get("tag_nochar_start", "[NOTAGS]") or "[NOTAGS]"),
             tag_nochar_end=str(data.get("tag_nochar_end", "[/NOTAGS]") or "[/NOTAGS]"),
-            default_example_order=clamp_int(data.get("default_example_order", 100), 100, 0, 9999),
+            default_example_order=clamp_int(data.get("default_example_order", 50), 50, 0, 9999),
             default_example_depth=clamp_int(data.get("default_example_depth", 4), 4, 0, 999),
             default_oc_order=clamp_int(data.get("default_oc_order", 77), 77, 0, 9999),
             default_oc_depth=clamp_int(data.get("default_oc_depth", 4), 4, 0, 999),

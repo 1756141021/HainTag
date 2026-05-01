@@ -71,7 +71,7 @@
   "swap_layout": "Swap input/output position",
   "tag_markers": "TAG Extraction Markers",
   "example_incomplete": "{field} is also required for this example to take effect",
-  "tip_depth": "Distance from the current input in conversation turns\nLarger = inserted earlier\n0 = treated as global content before history",
+  "tip_depth": "Message distance from user input\nLarger = further from user input\n0 = placed at the very beginning",
   "tip_order": "Sort priority, smaller = earlier\nEntries with same depth are sorted by this",
   "tip_library": "Artist Library / OC Character Library\nStore artist LoRA and character presets",
   "tip_close_card": "Dock to sidebar",

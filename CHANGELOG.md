@@ -5,6 +5,20 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-05-02
+
+### Fixed
+- **Prompt 顺序与深度语义** — 还原 SillyTavern 风格：`depth=0` 落在用户输入之后（最末端，约束力最强），`depth>0` 从末尾倒数 N 条插入；超出聊天范围的大 depth 自动溢出到历史之上作为 system 块，历史本身永不被切开
+- **存放台主工作区限定** — 存放台只对已 floated-out 的卡片生效，主工作区内拖拽不再触发存放台；主工作台 `widget-main` 加入受保护集合，永不进入存放台
+- **存放台位置** — `_tray_anchor_point` 改写，存放台必落在主工作台之外（优先右侧、再左侧、兜底屏幕右沿）
+- **侧栏开启崩溃** — `card.is_floating()` 三处误把 `@property` 当方法调用导致 `TypeError: 'bool' object is not callable`，统一改为属性访问
+- **i18n 文案** — `tip_depth` 恢复 v0.7.1 措辞（消息条数语义），`default_example_order` / `default_oc_order` 中文从「权重」改回「顺序」
+
+### Changed
+- **TagDictionary 懒加载** — 5.9 MB CSV 改为首次 `lookup` / `search_prefix` 时触发解析，启动期省 ~500 ms；`queue_csv()` 排队、`_ensure_loaded()` 自动加载
+- **例图默认 order** — `default_example_order` 由 100 调整为 50，新建例图自动落在「例图参考开始/结束」标记区间内
+- **打包瘦身** — spec 排除未用 PyQt6 子模块（QtQml / QtWebEngine / QtMultimedia / QtCharts 等）、关闭 UPX 压缩、过滤 50+ 个 Win10+ 系统自带的 `api-ms-win-*` 转发 DLL，dist 体积更干净，冷启动 DLL 解压开销降低
+
 ## [0.9.1] - 2026-05-01
 
 ### Added

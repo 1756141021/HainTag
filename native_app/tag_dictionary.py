@@ -27,6 +27,23 @@ class TagDictionary:
     def __init__(self) -> None:
         self._entries: dict[str, TagInfo] = {}
         self._alias_map: dict[str, str] = {}
+        self._lazy_paths: list[Path] = []
+        self._loaded: bool = False
+
+    def queue_csv(self, path: str | Path) -> None:
+        """Defer CSV load until first lookup. Multiple paths queue and merge on first use."""
+        p = Path(path)
+        if p.exists():
+            self._lazy_paths.append(p)
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        for p in self._lazy_paths:
+            with open(p, 'r', encoding='utf-8-sig') as f:
+                self._parse(f)
+        self._lazy_paths.clear()
 
     def load_csv(self, path: str | Path) -> None:
         """Load a Danbooru CSV dictionary. Can be called multiple times to merge sources."""
@@ -35,6 +52,7 @@ class TagDictionary:
             return
         with open(path, 'r', encoding='utf-8-sig') as f:
             self._parse(f)
+        self._loaded = True
 
     def _parse(self, f: IO[str]) -> None:
         reader = csv.reader(f)
@@ -86,6 +104,7 @@ class TagDictionary:
 
     def lookup(self, tag: str) -> TagInfo | None:
         """Return full TagInfo for a tag (including via alias lookup)."""
+        self._ensure_loaded()
         key = self._normalize(tag)
         info = self._entries.get(key)
         if info is not None:
@@ -97,6 +116,7 @@ class TagDictionary:
 
     def search_prefix(self, prefix: str, limit: int = 15) -> list[TagInfo]:
         """Return tags whose name or alias starts with *prefix*, ranked by count."""
+        self._ensure_loaded()
         prefix = self._normalize(prefix)
         if not prefix:
             return []

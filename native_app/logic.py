@@ -53,35 +53,6 @@ def _entry_block(entry, example_index: int) -> tuple[list[dict[str, str]], int]:
     return ([{"role": "assistant", "content": _format_example(entry, example_index)}], example_index)
 
 
-def _history_turns(history: list[dict[str, str]] | None) -> list[list[dict[str, str]]]:
-    turns: list[list[dict[str, str]]] = []
-    current: list[dict[str, str]] = []
-    for item in history or []:
-        role = str(item.get("role", "")).strip()
-        content = str(item.get("content", "")).strip()
-        if role not in {"system", "user", "assistant"} or not content:
-            continue
-        message = {"role": role, "content": content}
-        if role == "user":
-            if current:
-                turns.append(current)
-            current = [message]
-            continue
-        current.append(message)
-        if role == "assistant":
-            turns.append(current)
-            current = []
-    if current:
-        turns.append(current)
-    return turns
-
-
-def _turn_insert_index(turns: list[list[dict[str, str]]], depth: int) -> int:
-    if not turns:
-        return 0
-    return max(0, len(turns) - max(1, depth))
-
-
 def build_messages(
     prompts: list[PromptEntry],
     examples: list[ExampleEntry],
@@ -100,29 +71,40 @@ def build_messages(
         key=lambda item: getattr(item, "order", 0),
     )
 
-    depth_zero = [item for item in entries if getattr(item, "depth", 0) == 0]
-    depth_nonzero = [item for item in entries if getattr(item, "depth", 0) > 0]
+    messages: list[dict[str, str]] = []
 
-    example_counter = 0
-    prefix_blocks: list[list[dict[str, str]]] = []
+    if memory_mode and history:
+        for item in history:
+            role = str(item.get("role", "")).strip()
+            content = str(item.get("content", "")).strip()
+            if role in {"system", "user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
 
-    for entry in depth_zero:
-        block, example_counter = _entry_block(entry, example_counter)
-        prefix_blocks.append(block)
-
-    turns = _history_turns(history if memory_mode else None)
+    history_floor = len(messages)
 
     if active_input:
-        turns.append([{"role": "user", "content": active_input}])
+        messages.append({"role": "user", "content": active_input})
 
-    for entry in depth_nonzero:
-        depth = getattr(entry, "depth", 0)
+    from collections import defaultdict
+    by_depth: dict[int, list[dict[str, str]]] = defaultdict(list)
+    example_counter = 0
+    for entry in entries:
+        d = max(0, getattr(entry, "depth", 0))
         block, example_counter = _entry_block(entry, example_counter)
-        turns.insert(_turn_insert_index(turns, depth), block)
+        by_depth[d].extend(block)
 
-    messages = [message for block in prefix_blocks for message in block]
-    for turn in turns:
-        messages.extend(turn)
+    above_history_end = 0
+    for depth in sorted(by_depth, reverse=True):
+        group = by_depth[depth]
+        raw = len(messages) - depth
+        if raw >= history_floor:
+            insert_at = raw
+        else:
+            insert_at = above_history_end
+            above_history_end += len(group)
+            history_floor += len(group)
+        messages[insert_at:insert_at] = group
+
     return messages
 
 

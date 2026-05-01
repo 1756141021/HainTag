@@ -212,7 +212,7 @@ class SettingsPanel(QWidget):
             row.addStretch()
             return row
 
-        self._def_example_order = _default_spin(100, 9999)
+        self._def_example_order = _default_spin(50, 9999)
         self._def_example_depth = _default_spin(4, 999)
         self._def_oc_order = _default_spin(77, 9999)
         self._def_oc_depth = _default_spin(4, 999)
