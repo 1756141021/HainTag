@@ -19,8 +19,8 @@ __temp_*.txt
 .idea/
 *.swp
 
-# Claude Code local settings (may contain tokens)
-.claude/settings.local.json
+# Claude Code dev config (project-local, not for public repo)
+.claude/
 
 # Large data files
 *.png
