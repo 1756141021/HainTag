@@ -12,6 +12,12 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         'onnxruntime',
+        # huggingface_hub 在 tagger.py 里只用来下载模型，下面这些 ML 后端
+        # 都不需要——我们 inference 走 onnxruntime 子进程
+        'torch', 'torchvision', 'torchaudio', 'torch.distributed', 'torch.testing',
+        'transformers', 'tokenizers', 'safetensors', 'accelerate',
+        'scipy', 'scipy.signal', 'scipy.sparse', 'scipy.linalg',
+        'matplotlib', 'matplotlib.pyplot', 'matplotlib.backends',
         'PyQt6.QtQml', 'PyQt6.QtQuick', 'PyQt6.QtQuickWidgets', 'PyQt6.QtWebEngine',
         'PyQt6.QtWebEngineCore', 'PyQt6.QtWebEngineWidgets', 'PyQt6.QtMultimedia',
         'PyQt6.QtMultimediaWidgets', 'PyQt6.QtPdf', 'PyQt6.QtPdfWidgets',
