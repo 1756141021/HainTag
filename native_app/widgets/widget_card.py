@@ -359,6 +359,11 @@ class WidgetCard(QFrame):
     def toggle_pin(self) -> None:
         self._toggle_pin()
 
+    def set_pinned(self, pinned: bool) -> None:
+        if self._pinned == bool(pinned):
+            return
+        self._toggle_pin()
+
     @property
     def is_pinned(self) -> bool:
         return self._pinned
@@ -372,13 +377,12 @@ class WidgetCard(QFrame):
         if self._floating:
             return
         self._floating = True
-        self._pinned = True  # default always on top
+        self._pinned = False  # user can pin manually via the pin button
         self._workspace_parent = self.parentWidget()
         size = self.size()
         self.setParent(None)
         self.setWindowFlags(
-            Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint
         )
         self.move(global_pos - QPoint(size.width() // 2, 16))
         self.resize(size)

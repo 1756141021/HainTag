@@ -5,7 +5,17 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.2] - 2026-05-02
+## [0.9.3] - 2026-05-02
+
+### Fixed
+- **存放台只在工作区外触发** — 卡片在工作区（应用窗口）内拖拽永不触发存放台；只有 `_floating=True`（已浮出为独立顶层窗口）的卡片才能形成 / 加入存放台
+- **`settings.json` 保存抗锁** — `os.replace` 原子保存遇 Windows AV / OneDrive / 杀软扫描临时锁文件不再直接崩溃，新增三档退避重试（50ms / 150ms / 400ms），失败时回退直写保数据
+
+### Changed
+- **浮出卡片默认非顶置** — `WidgetCard.float_out` 不再默认置顶，去掉 `Qt.WindowStaysOnTopHint`，`_pinned` 默认 `False`；要顶置手动点针。这样从存放台拖出的卡片、新浮出的卡片都不会强行覆盖其它窗口
+- **WidgetCard 新增 `set_pinned(bool)` 公开接口** — 给外部按需置位 / 复位顶置状态用
+
+
 
 ### Fixed
 - **Prompt 顺序与深度语义** — 还原 SillyTavern 风格：`depth=0` 落在用户输入之后（最末端，约束力最强），`depth>0` 从末尾倒数 N 条插入；超出聊天范围的大 depth 自动溢出到历史之上作为 system 块，历史本身永不被切开

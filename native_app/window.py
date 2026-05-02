@@ -108,7 +108,7 @@ from .widgets.workbench_timeline import WorkbenchTimeline
 from .widgets.workspace import DockQueryResult, Workspace
 
 _CONVERSATION_HISTORY_MAX_MESSAGES = 20
-_FLOATING_TRAY_PROTECTED_WIDGET_IDS: set[str] = {"widget-main"}
+_FLOATING_TRAY_PROTECTED_WIDGET_IDS: set[str] = set()
 _FLOATING_TRAY_RESTORE_ON_PERSIST_WIDGET_IDS = {"widget-main"}
 
 if sys.platform == "win32":
@@ -971,7 +971,8 @@ class MainWindow(QWidget):
         )
 
     def _visible_tray_candidate_cards(self) -> list[WidgetCard]:
-        # Tray candidates must be floated OUT of the main workspace.
+        # Tray candidates must have floated OUT of the workspace
+        # (i.e. become independent top-level windows).
         return [
             card for card in self.workspace.all_cards()
             if card.isVisible()
@@ -1172,8 +1173,8 @@ class MainWindow(QWidget):
             return
         if widget_id in _FLOATING_TRAY_PROTECTED_WIDGET_IDS:
             return
-        # Tray only operates on cards floated OUT of the main workspace.
-        # Cards still inside the workspace must never spawn a tray.
+        # Tray is a workspace-EXTERNAL feature: only cards floated OUT
+        # of the workspace can spawn or join one.
         if not getattr(card, "_floating", False):
             return
 
@@ -1187,9 +1188,7 @@ class MainWindow(QWidget):
 
         nearby = [
             other for other in self._visible_tray_candidate_cards()
-            if other is not card
-            and getattr(other, "_floating", False)
-            and self._cards_overlap_or_near(card, other)
+            if other is not card and self._cards_overlap_or_near(card, other)
         ]
         if not nearby:
             return

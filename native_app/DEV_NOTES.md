@@ -3,7 +3,7 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.2"`
+- 单一版本来源：`__version__ = "0.9.3"`
 - 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
 - 版本号遵循 SemVer（语义化版本）
 
@@ -57,7 +57,7 @@
 - **外部接口零破坏**：`from .storage import AppStorage` 不变，所有方法签名不变
 - 子管理器：
   - `_paths.py` — `StoragePaths` dataclass，共享路径根目录
-  - `_state.py` — `StateStorage`：load_state / save_state → `settings.json`
+  - `_state.py` — `StateStorage`：load_state / save_state → `settings.json`。save 走 `tmp + os.replace` 原子写；遇 Windows 临时锁（AV / OneDrive 扫文件）有三档退避重试（50/150/400ms），全失败时回退直写
   - `_likes.py` — `LikesStorage`：load_likes / save_likes → `likes.json`
   - `_hints.py` — `HintsStorage`：load_shown_hints / save_shown_hints → `hints.json`
   - `_library.py` — `LibraryStorage`：load/save_library + copy/remove_library_image → `library.json` + `library_images/`

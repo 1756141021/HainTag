@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from ..models import AppState
 from ._paths import StoragePaths
@@ -26,4 +27,26 @@ class StateStorage:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = target.with_name(f"{target.name}.tmp")
         tmp_path.write_text(payload, encoding="utf-8")
-        os.replace(tmp_path, target)
+        # Windows: settings.json may be transiently locked by AV / sync tools.
+        # Retry the atomic rename a few times before giving up.
+        last_error: Exception | None = None
+        for delay in (0, 0.05, 0.15, 0.4):
+            if delay:
+                time.sleep(delay)
+            try:
+                os.replace(tmp_path, target)
+                return
+            except PermissionError as exc:
+                last_error = exc
+        # Final fallback: write directly (loses atomicity but keeps the data).
+        try:
+            target.write_text(payload, encoding="utf-8")
+        except OSError:
+            pass
+        finally:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        if last_error is not None and not target.exists():
+            raise last_error

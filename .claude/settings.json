@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tasklist)",
+      "Bash(\"/c/Program Files/Rime/weasel-0.17.4/WeaselServer.exe\")",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:gist.github.com)"
+    ]
+  }
+}
