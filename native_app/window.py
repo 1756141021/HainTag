@@ -2612,6 +2612,8 @@ class MainWindow(QWidget):
         self._worker.finished.connect(self._clear_worker_if_done)
         self.input_widget.set_sending(True)
         self.settings_panel.set_request_fields_disabled(True)
+        if not summary_mode:
+            self.output_widget.set_streaming(True)
         self._worker.start()
 
     def _on_worker_delta(self, text: str) -> None:
@@ -2623,6 +2625,7 @@ class MainWindow(QWidget):
         dialog.exec()
 
     def _on_worker_error(self, message: str, status_code: int, details: str) -> None:
+        self.output_widget.set_streaming(False)
         if self._current_mode == 'chat':
             self.workbench_timeline.mark_current(status="failed")
         if self._pending_history_input and self._current_mode == 'chat':
@@ -2653,6 +2656,7 @@ class MainWindow(QWidget):
         self._finish_worker_state()
 
     def _on_worker_cancelled(self) -> None:
+        self.output_widget.set_streaming(False)
         if self._pending_history_input and self._current_mode == 'chat':
             self.input_widget.set_text(self._pending_history_input)
             self._pending_history_input = ""
@@ -2664,6 +2668,9 @@ class MainWindow(QWidget):
 
     def _on_worker_finished(self) -> None:
         s = self._state.settings
+        self.output_widget.set_streaming(False)
+        if self._current_mode == 'chat':
+            self.output_widget.set_generation_status("done")
         self.output_widget.apply_post_processing(
             tag_full_start=s.tag_full_start,
             tag_full_end=s.tag_full_end,

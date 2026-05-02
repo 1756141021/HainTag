@@ -5,6 +5,13 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-05-02
+
+### Fixed
+- **流式生成卡死 / 输出区缩成一团** — 流式模式下，模型 reasoning 和正文 token 每次追加都会触发 `_TagStreamView.refresh()`，整批 chip 反复 deleteLater + 重建 + setStyleSheet，长输出（DeepSeek V4 Pro 等）下主线程被打满，最后 `apply_post_processing` 一刀又把 chip 全砸进 FlowLayout，inner 塌成一个 chip 大小。现在流式期间 chip 流暂停渲染、直接显示 editor 文本，完成后一次性建 chip
+- **`_FlowLayout.sizeHint` 返回单 chip 尺寸** — 改为按内容宽度跑一次 `_do_layout` 拿真实累加高度，`adjustSize()` 不再把 inner 缩塌
+- **生成完成后状态栏卡在「生成中」** — `_on_worker_finished` 漏掉了 `set_generation_status("done")`，现在补上，错误 / 取消路径也一起清流式标记
+
 ## [0.9.3] - 2026-05-02
 
 ### Fixed

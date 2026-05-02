@@ -631,7 +631,14 @@ class _FlowLayout(QLayout):
         self._do_layout(rect, False)
 
     def sizeHint(self) -> QSize:
-        return self.minimumSize()
+        margins = self.contentsMargins()
+        width = 0
+        for item in self._items:
+            width = max(width, item.sizeHint().width())
+        width += margins.left() + margins.right()
+        height = self._do_layout(QRect(0, 0, max(width, 1), 0), True)
+        height += margins.top() + margins.bottom()
+        return QSize(width, height)
 
     def minimumSize(self) -> QSize:
         size = QSize()
@@ -904,6 +911,7 @@ class _TagStreamView(QScrollArea):
         self._scrub_preview_weight = 1.0
         self._scrub_chip: _WorkbenchTagChip | None = None
         self._suppress_next_context_menu = False
+        self._streaming = False
         self._hover_tip: _TagHoverTip | None = None
         self._hover_tip_parent: QWidget | None = None
         self.setObjectName("WorkbenchTagStream")
@@ -926,7 +934,24 @@ class _TagStreamView(QScrollArea):
         self._dictionary = dictionary
         self.refresh()
 
+    def set_streaming(self, streaming: bool) -> None:
+        if self._streaming == streaming:
+            return
+        self._streaming = streaming
+        if streaming:
+            while self._flow.count():
+                item = self._flow.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self._chips = []
+            self._empty.setVisible(False)
+        else:
+            self.refresh()
+
     def refresh(self) -> None:
+        if self._streaming:
+            return
         while self._flow.count():
             item = self._flow.takeAt(0)
             widget = item.widget()
@@ -1404,8 +1429,20 @@ class OutputWidget(QWidget):
         cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.insertText(text)
         self.full_editor.setTextCursor(cursor)
-        self.full_tag_stream.refresh()
-        self._show_stream_for_current_tab()
+        if not self.full_tag_stream._streaming:
+            self.full_tag_stream.refresh()
+            self._show_stream_for_current_tab()
+
+    def set_streaming(self, streaming: bool) -> None:
+        self.full_tag_stream.set_streaming(streaming)
+        self.nochar_tag_stream.set_streaming(streaming)
+        if streaming:
+            self.full_tag_stream.hide()
+            self.nochar_tag_stream.hide()
+            self.full_editor.show()
+            self.nochar_editor.show()
+        else:
+            self._show_stream_for_current_tab()
 
     def set_dictionary(self, dictionary: TagDictionary) -> None:
         self.full_editor.set_dictionary(dictionary)
