@@ -249,6 +249,12 @@ class _SuggestionRow(QFrame):
 class TagCompleterPopup(QWidget):
     """HTML-design autocomplete popup for TAG suggestions."""
 
+    # Tracks which popup is currently shown app-wide. When a popup is about to
+    # show suggestions, it hides whichever other popup was last active so we
+    # never see two popups overlap (one for the focused edit, one stale on a
+    # workbench editor whose 200ms focus-out hide is still pending).
+    _active_popup: "TagCompleterPopup | None" = None
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -296,6 +302,18 @@ class TagCompleterPopup(QWidget):
         if not results:
             self.hide()
             return
+        # Only one popup at a time across the whole app. Hide whichever was last
+        # active before swapping ourselves in.
+        prev = TagCompleterPopup._active_popup
+        if prev is not None and prev is not self:
+            try:
+                from PyQt6 import sip
+                if not sip.isdeleted(prev):
+                    prev.hide()
+            except (RuntimeError, ImportError):
+                pass
+        TagCompleterPopup._active_popup = self
+
         self._results = results
         self._target_edit = edit
         self._token_start = token_start
@@ -314,6 +332,11 @@ class TagCompleterPopup(QWidget):
         self.move(_editor_cursor_global_pos(edit))
         self.show()
         self.raise_()
+
+    def hideEvent(self, event) -> None:
+        if TagCompleterPopup._active_popup is self:
+            TagCompleterPopup._active_popup = None
+        super().hideEvent(event)
 
     def apply_theme(self) -> None:
         p = current_palette()

@@ -5,6 +5,11 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.6] - 2026-05-02
+
+### Fixed
+- **TAG 补全弹窗多开重叠** — 主工作台 editor 和其它卡片输入框各自挂了独立 `TagCompleterPopup`，A 焦点离开时 200ms 延迟 hide 还没触发，B 已经 show 出来，两个弹窗同时可见。改为类级 `_active_popup` 单例：新 popup 调 `show_suggestions` 前先 hide 上一个，`hideEvent` 里清引用，全局只有一个补全窗可见
+
 ## [0.9.5] - 2026-05-02
 
 ### Added
