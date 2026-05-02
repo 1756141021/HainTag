@@ -18,6 +18,7 @@ class InputWidget(QWidget):
         self._translator = translator
         self._sending = False
         self._send_mode = SEND_MODE_ENTER
+        self._tag_dictionary = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -108,6 +109,11 @@ class InputWidget(QWidget):
             original_key_press(event)
 
         self.editor.keyPressEvent = _key_press
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
 
     def set_text(self, value: str) -> None:
         self.editor.blockSignals(True)

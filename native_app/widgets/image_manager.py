@@ -197,6 +197,10 @@ class _StyledDialog(QWidget):
             self._edit.selectAll()
             self._edit.returnPressed.connect(self._accept)
             layout.addWidget(self._edit)
+            host_dict = getattr(parent, "_tag_dictionary", None)
+            if host_dict is not None:
+                from .tag_completer import install_completer
+                install_completer(self._edit, host_dict)
         elif mode == "confirm":
             if default:
                 msg = QLabel(default, surface)
@@ -1158,10 +1162,16 @@ class ImageManagerWindow(QWidget):
         self._cut_paths: list[str] = []  # internal clipboard for cut/paste
         self._nav_history: list[str] = []
         self._nav_future: list[str] = []
+        self._tag_dictionary = None
         # Resize/drag handled by nativeEvent + WM_NCHITTEST
         self.resize(_dp(1080), _dp(740))
         self.setMinimumSize(_dp(640), _dp(420))
         self._build()
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
 
     def _build(self):
         p = _p()

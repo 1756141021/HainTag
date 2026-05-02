@@ -1299,6 +1299,11 @@ class OutputWidget(QWidget):
         copy_layout = QHBoxLayout(self._copy_bar)
         copy_layout.setContentsMargins(_dp(16), _dp(8), _dp(16), _dp(8))
         copy_layout.setSpacing(_dp(6))
+        self.edit_toggle_button = QPushButton(self._copy_bar)
+        self.edit_toggle_button.setObjectName("WorkbenchCopyButton")
+        self.edit_toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.edit_toggle_button.clicked.connect(self._toggle_edit_mode)
+        copy_layout.addWidget(self.edit_toggle_button)
         copy_layout.addStretch(1)
         self.copy_button = QPushButton(self._copy_bar)
         self.copy_button.setObjectName("WorkbenchCopyButton")
@@ -1307,6 +1312,8 @@ class OutputWidget(QWidget):
         copy_layout.addWidget(self.copy_button)
         root.addWidget(self._copy_bar, 0)
 
+        self._edit_mode = False
+        self._tag_dictionary = None
         self.retranslate_ui()
         self._set_active_tab(0)
         self.apply_workbench_style()
@@ -1317,6 +1324,7 @@ class OutputWidget(QWidget):
             and hasattr(self, "nochar_tag_stream")
             and watched in (self.full_editor, self.nochar_editor)
             and event.type() == QEvent.Type.FocusOut
+            and not self._edit_mode
         ):
             self._show_stream_for_current_tab()
         return super().eventFilter(watched, event)
@@ -1339,12 +1347,42 @@ class OutputWidget(QWidget):
         self.full_tab_button.setText(t('full_tags'))
         self.nochar_tab_button.setText(t('nochar_tags'))
         self.copy_button.setText(t('copy'))
+        self._refresh_edit_toggle_label()
         self.full_editor.set_translator(self._translator)
         self.nochar_editor.set_translator(self._translator)
         self.full_editor.setPlaceholderText(t('output_waiting_tag'))
         self.nochar_editor.setPlaceholderText(t('output_waiting_tag'))
         self.full_tag_stream.retranslate_ui()
         self.nochar_tag_stream.retranslate_ui()
+
+    def _refresh_edit_toggle_label(self) -> None:
+        t = self._translator.t
+        key = 'output_view_mode' if self._edit_mode else 'output_edit_mode'
+        fallback = '◧ 视图' if self._edit_mode else '✏ 编辑'
+        text = t(key)
+        if not text or text == key:
+            text = fallback
+        self.edit_toggle_button.setText(text)
+
+    def _toggle_edit_mode(self) -> None:
+        self._edit_mode = not self._edit_mode
+        self._refresh_edit_toggle_label()
+        self._show_stream_for_current_tab()
+        if self._edit_mode:
+            current_editor = self.full_editor if self.stack.currentIndex() == 0 else self.nochar_editor
+            current_editor.setFocus()
+
+    def is_edit_mode(self) -> bool:
+        return self._edit_mode
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        self.full_editor.set_dictionary(dictionary)
+        self.nochar_editor.set_dictionary(dictionary)
+        self.full_tag_stream.set_dictionary(dictionary)
+        self.nochar_tag_stream.set_dictionary(dictionary)
+        install_completer_recursive(self, dictionary)
 
     def _set_active_tab(self, index: int) -> None:
         index = 1 if index == 1 else 0
@@ -1524,7 +1562,15 @@ class OutputWidget(QWidget):
         self._copy(editor)
 
     def _show_stream_for_current_tab(self) -> None:
-        self.full_editor.hide()
-        self.nochar_editor.hide()
-        self.full_tag_stream.setVisible(self.stack.currentIndex() == 0)
-        self.nochar_tag_stream.setVisible(self.stack.currentIndex() == 1)
+        full_active = self.stack.currentIndex() == 0
+        nochar_active = self.stack.currentIndex() == 1
+        if self._edit_mode:
+            self.full_tag_stream.hide()
+            self.nochar_tag_stream.hide()
+            self.full_editor.setVisible(full_active)
+            self.nochar_editor.setVisible(nochar_active)
+        else:
+            self.full_editor.hide()
+            self.nochar_editor.hide()
+            self.full_tag_stream.setVisible(full_active)
+            self.nochar_tag_stream.setVisible(nochar_active)

@@ -416,6 +416,7 @@ class PromptManagerWidget(QWidget):
     def __init__(self, translator: Translator, parent=None) -> None:
         super().__init__(parent)
         self._translator = translator
+        self._tag_dictionary = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -423,6 +424,7 @@ class PromptManagerWidget(QWidget):
 
         self.list_widget = PromptListWidget(translator, self)
         self.list_widget.changed.connect(self.changed)
+        self.list_widget.model().rowsInserted.connect(self._on_rows_inserted)
         root.addWidget(self.list_widget, 1)
 
         # Bottom row: add button + preview button
@@ -441,6 +443,17 @@ class PromptManagerWidget(QWidget):
         btn_row.addWidget(self.preview_button)
         root.addLayout(btn_row)
         self.retranslate_ui()
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
+
+    def _on_rows_inserted(self, *_args) -> None:
+        if self._tag_dictionary is None:
+            return
+        from .tag_completer import install_completer_recursive
+        install_completer_recursive(self.list_widget, self._tag_dictionary)
 
     def _add_prompt(self) -> None:
         next_order = max([entry.order for entry in self.prompt_entries()] or [0]) + 1

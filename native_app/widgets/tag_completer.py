@@ -8,11 +8,58 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPlainTextEdit,
     QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+# An "edit" we can attach the completer to.
+TextEditor = QTextEdit | QPlainTextEdit | QLineEdit
+
+
+def _is_line_edit(edit: QWidget) -> bool:
+    return isinstance(edit, QLineEdit)
+
+
+def _editor_text(edit: TextEditor) -> str:
+    if _is_line_edit(edit):
+        return edit.text()
+    return edit.toPlainText()
+
+
+def _editor_cursor_pos(edit: TextEditor) -> int:
+    if _is_line_edit(edit):
+        return edit.cursorPosition()
+    return edit.textCursor().position()
+
+
+def _editor_replace_range(edit: TextEditor, start: int, end: int, replacement: str) -> None:
+    if _is_line_edit(edit):
+        text = edit.text()
+        edit.setText(text[:start] + replacement + text[end:])
+        edit.setCursorPosition(start + len(replacement))
+        return
+    cursor = edit.textCursor()
+    cursor.setPosition(start)
+    cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+    cursor.insertText(replacement)
+    edit.setTextCursor(cursor)
+
+
+def _editor_cursor_global_pos(edit: TextEditor) -> QPoint:
+    if _is_line_edit(edit):
+        fm = edit.fontMetrics()
+        prefix = edit.text()[: edit.cursorPosition()]
+        margins = edit.textMargins()
+        x = fm.horizontalAdvance(prefix) + margins.left() + 4
+        y = edit.height()
+        return edit.mapToGlobal(QPoint(x, y))
+    cursor = edit.textCursor()
+    rect = edit.cursorRect(cursor)
+    return edit.mapToGlobal(QPoint(rect.x(), rect.bottom() + _dp(4)))
 
 from ..tag_dictionary import TagDictionary, TagInfo
 from ..theme import _fs, current_palette
@@ -239,13 +286,13 @@ class TagCompleterPopup(QWidget):
 
         self._results: list[TagInfo] = []
         self._rows: list[_SuggestionRow] = []
-        self._target_edit: QTextEdit | None = None
+        self._target_edit: TextEditor | None = None
         self._token_start = 0
         self._query = ""
         self._active_index = 0
         self.apply_theme()
 
-    def show_suggestions(self, results: list[TagInfo], edit: QTextEdit, token_start: int, query: str = "") -> None:
+    def show_suggestions(self, results: list[TagInfo], edit: TextEditor, token_start: int, query: str = "") -> None:
         if not results:
             self.hide()
             return
@@ -264,10 +311,7 @@ class TagCompleterPopup(QWidget):
         width = min(max(280, edit.width(), _dp(300)), _dp(520))
         self.resize(width, height)
 
-        cursor = edit.textCursor()
-        cursor_rect = edit.cursorRect(cursor)
-        global_pos = edit.mapToGlobal(QPoint(cursor_rect.x(), cursor_rect.bottom() + _dp(4)))
-        self.move(global_pos)
+        self.move(_editor_cursor_global_pos(edit))
         self.show()
         self.raise_()
 
@@ -325,18 +369,28 @@ class TagCompleterPopup(QWidget):
         self._insert_tag(info.name)
         self.hide()
         if self._target_edit is not None:
-            self._target_edit.setFocus()
+            try:
+                from PyQt6 import sip
+                if not sip.isdeleted(self._target_edit):
+                    self._target_edit.setFocus()
+            except (RuntimeError, ImportError):
+                pass
 
     def _insert_tag(self, tag_name: str) -> None:
         edit = self._target_edit
         if edit is None:
             return
-        cursor = edit.textCursor()
-        current_pos = cursor.position()
-        cursor.setPosition(self._token_start)
-        cursor.setPosition(current_pos, QTextCursor.MoveMode.KeepAnchor)
-        cursor.insertText(tag_name + ", ")
-        edit.setTextCursor(cursor)
+        try:
+            from PyQt6 import sip
+            if sip.isdeleted(edit):
+                return
+        except (RuntimeError, ImportError):
+            return
+        try:
+            current_pos = _editor_cursor_pos(edit)
+            _editor_replace_range(edit, self._token_start, current_pos, tag_name + ", ")
+        except RuntimeError:
+            pass
 
     def _refresh_footer(self) -> None:
         p = current_palette()
@@ -383,38 +437,87 @@ class TagCompleterPopup(QWidget):
         return _tr(self._target_edit or self, "ac_related", "相关")
 
 
-def install_completer(edit: QTextEdit, dictionary: TagDictionary, min_chars: int = 2) -> TagCompleterPopup:
-    """Install HTML-style TAG autocomplete on a QTextEdit."""
+def _should_skip(edit: TextEditor) -> bool:
+    """Universal opt-out filter: read-only, password fields, or explicit skip property."""
+    if getattr(edit, "_tag_completer_popup", None) is not None:
+        return True  # already installed
+    if edit.property("noTagCompleter") is True:
+        return True
+    if _is_line_edit(edit):
+        if edit.isReadOnly():
+            return True
+        if edit.echoMode() != QLineEdit.EchoMode.Normal:
+            return True
+        return False
+    if hasattr(edit, "isReadOnly") and edit.isReadOnly():
+        return True
+    return False
+
+
+def install_completer(edit: TextEditor, dictionary: TagDictionary, min_chars: int = 2) -> TagCompleterPopup | None:
+    """Install HTML-style TAG autocomplete on a QTextEdit / QPlainTextEdit / QLineEdit.
+
+    Returns the popup, or None if the editor is read-only / opted out / already installed.
+    """
+    if _should_skip(edit):
+        return getattr(edit, "_tag_completer_popup", None)
+
     popup = TagCompleterPopup(edit.window())
     _timer = QTimer()
     _timer.setSingleShot(True)
     _timer.setInterval(150)
 
-    def _on_text_changed() -> None:
+    def _safe_hide_popup() -> None:
+        try:
+            from PyQt6 import sip
+            if not sip.isdeleted(popup):
+                popup.hide()
+        except (RuntimeError, ImportError):
+            pass
+
+    def _popup_alive() -> bool:
+        try:
+            from PyQt6 import sip
+            return not sip.isdeleted(popup)
+        except (RuntimeError, ImportError):
+            return False
+
+    def _on_text_changed(*_args) -> None:
         _timer.start()
 
     def _do_complete() -> None:
+        try:
+            from PyQt6 import sip
+            if sip.isdeleted(edit):
+                _safe_hide_popup()
+                _timer.stop()
+                return
+        except RuntimeError:
+            _safe_hide_popup()
+            return
         if not edit.hasFocus():
-            popup.hide()
+            _safe_hide_popup()
             return
 
-        cursor = edit.textCursor()
-        pos = cursor.position()
-        text = edit.toPlainText()
+        pos = _editor_cursor_pos(edit)
+        text = _editor_text(edit)
         token_start = text.rfind(",", 0, pos)
         token_start = 0 if token_start == -1 else token_start + 1
         raw_token = text[token_start:pos]
         token = raw_token.strip()
         if len(token) < min_chars:
-            popup.hide()
+            _safe_hide_popup()
             return
 
         adjusted_start = token_start + (len(raw_token) - len(raw_token.lstrip()))
         results = dictionary.search_prefix(token, limit=12)
-        if results:
-            popup.show_suggestions(results, edit, adjusted_start, token)
+        if results and _popup_alive():
+            try:
+                popup.show_suggestions(results, edit, adjusted_start, token)
+            except RuntimeError:
+                pass
         else:
-            popup.hide()
+            _safe_hide_popup()
 
     _suppress_until = [0.0]
 
@@ -453,8 +556,19 @@ def install_completer(edit: QTextEdit, dictionary: TagDictionary, min_chars: int
 
     original_focus_out = edit.focusOutEvent
 
+    def _deferred_hide_check() -> None:
+        try:
+            from PyQt6 import sip
+            if sip.isdeleted(edit):
+                _safe_hide_popup()
+                return
+            if not edit.hasFocus():
+                _safe_hide_popup()
+        except RuntimeError:
+            _safe_hide_popup()
+
     def _focus_out(event) -> None:
-        QTimer.singleShot(200, lambda: popup.hide() if not edit.hasFocus() else None)
+        QTimer.singleShot(200, _deferred_hide_check)
         original_focus_out(event)
 
     edit.focusOutEvent = _focus_out
@@ -464,11 +578,13 @@ def install_completer(edit: QTextEdit, dictionary: TagDictionary, min_chars: int
             from PyQt6 import sip
             if sip.isdeleted(edit):
                 _active_timer.stop()
+                _safe_hide_popup()
                 return
             if not edit.isVisible() or not edit.window().isActiveWindow():
-                popup.hide()
+                _safe_hide_popup()
         except RuntimeError:
             _active_timer.stop()
+            _safe_hide_popup()
 
     _active_timer = QTimer()
     _active_timer.setInterval(500)
@@ -479,3 +595,24 @@ def install_completer(edit: QTextEdit, dictionary: TagDictionary, min_chars: int
     edit._tag_completer_timer = _timer
     edit._tag_completer_active_timer = _active_timer
     return popup
+
+
+def install_completer_recursive(root: QWidget, dictionary: TagDictionary, min_chars: int = 2) -> int:
+    """Walk root's widget tree and attach the TAG completer to every editable text input.
+
+    Skips read-only fields, password (non-Normal echo) line edits, and any widget with
+    the dynamic property `noTagCompleter=True`. Idempotent — already-installed editors
+    are detected and skipped via `_tag_completer_popup`.
+
+    Returns the count of newly-installed completers (useful for diagnostics / tests).
+    """
+    targets: list[TextEditor] = []
+    for cls in (QTextEdit, QPlainTextEdit, QLineEdit):
+        targets.extend(root.findChildren(cls))
+    installed = 0
+    for edit in targets:
+        if _should_skip(edit):
+            continue
+        if install_completer(edit, dictionary, min_chars=min_chars) is not None:
+            installed += 1
+    return installed

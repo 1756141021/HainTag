@@ -181,8 +181,14 @@ class MetadataDestroyerWidget(QWidget):
         self._single_dst: str = ""
         self._single_src_name: str = ""
         self._edit_lora_rows: list[tuple[QWidget, QLineEdit, QDoubleSpinBox]] = []
+        self._tag_dictionary = None
 
         self._build_ui()
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
 
     def set_destroy_text(self, text: str | None) -> None:
         """Set the metadata text used by destroy mode; None means use defaults."""
@@ -560,6 +566,9 @@ class MetadataDestroyerWidget(QWidget):
         insert_at = max(0, self._lora_layout.count() - 1) if hasattr(self, "_lora_layout") else 0
         self._lora_layout.insertWidget(insert_at, row)
         install_localized_context_menus(row, self._translator)
+        if self._tag_dictionary is not None:
+            from .tag_completer import install_completer_recursive
+            install_completer_recursive(row, self._tag_dictionary)
 
     def _remove_lora_row(self, row: QWidget) -> None:
         self._edit_lora_rows = [item for item in self._edit_lora_rows if item[0] is not row]

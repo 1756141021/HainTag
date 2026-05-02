@@ -41,6 +41,8 @@
   "changelog": "更新日志",
   "changelog_empty": "没有找到更新日志。",
   "output_waiting_tag": "等待生成 TAG",
+  "output_edit_mode": "✏ 编辑",
+  "output_view_mode": "◧ 视图",
   "generation_running": "生成中",
   "generation_done": "完成",
   "generation_error": "失败",

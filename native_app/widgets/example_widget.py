@@ -124,9 +124,15 @@ class ExampleWidget(QWidget):
         self.tags_edit.textChanged.connect(self._check_completeness)
         self.description_edit.textChanged.connect(self._check_completeness)
 
+        self._tag_dictionary = None
         self.retranslate_ui()
         self._refresh_image_preview()
         install_localized_context_menus(self, translator)
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
 
     def _select_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(

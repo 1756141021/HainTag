@@ -3105,6 +3105,8 @@ class InterrogatorWidget(QWidget):
     def set_tag_dictionary(self, dictionary):
         self._local_tab.set_tag_dictionary(dictionary)
         self._llm_tab.set_tag_dictionary(dictionary)
+        from .tag_completer import install_completer_recursive
+        install_completer_recursive(self, dictionary)
 
     def apply_interrogator_settings(self, settings):
         self._local_tab.apply_local_settings(settings)

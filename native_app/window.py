@@ -96,7 +96,6 @@ from .widgets.input_widget import InputWidget
 from .widgets.metadata_viewer import MetadataViewerWidget
 from .widgets.metadata_destroyer import MetadataDestroyerWidget
 from .widgets.image_manager import ImageManagerWindow
-from .widgets.tag_completer import install_completer
 from .widgets.text_context_menu import add_text_edit_actions, apply_app_menu_style, handle_text_edit_action, install_localized_context_menus
 from .tag_dictionary import TagDictionary
 from .widgets.output_widget import OutputWidget
@@ -526,8 +525,10 @@ class MainWindow(QWidget):
             if csv_path.exists():
                 self._tag_dictionary.queue_csv(csv_path)
                 break
-        self.output_widget.set_dictionary(self._tag_dictionary)
-        self.interrogator_widget.set_tag_dictionary(self._tag_dictionary)
+        # Dispatch the dictionary to every host that opted into the TagCompletionHost
+        # protocol (set_tag_dictionary). New panels just implement set_tag_dictionary
+        # and add themselves to this list — no per-widget install_completer call here.
+        self._dispatch_tag_dictionary()
         self.interrogator_widget.apply_interrogator_settings(self._state.settings)
         s_init = self.settings_panel.settings()
         from .logic import normalize_api_base_url
@@ -535,11 +536,6 @@ class MainWindow(QWidget):
             normalize_api_base_url(s_init.api_base_url), s_init.api_key, s_init.model
         )
         self.interrogator_widget.settings_changed.connect(self._on_interrogator_settings_changed)
-
-        # Install tag autocomplete on input editor and output editors
-        install_completer(self.input_widget.editor, self._tag_dictionary)
-        install_completer(self.output_widget.full_editor, self._tag_dictionary)
-        install_completer(self.output_widget.nochar_editor, self._tag_dictionary)
         self.input_widget.install_send_key_handler()
         self.input_widget.set_send_mode(self._state.settings.send_mode)
 
@@ -913,7 +909,7 @@ class MainWindow(QWidget):
         editor.changed.connect(self._on_examples_changed)
         editor.delete_requested.connect(self._delete_example_card)
         editor.error_occurred.connect(self._on_example_storage_error)
-        install_completer(editor.tags_edit, self._tag_dictionary)
+        editor.set_tag_dictionary(self._tag_dictionary)
         card.set_content(editor)
         self.workspace.add_card(card)
         self._register_card_hooks(card)
@@ -2469,6 +2465,30 @@ class MainWindow(QWidget):
     def _on_output_widget_changed(self) -> None:
         self._persist_current_history_output()
 
+    def _tag_completion_hosts(self) -> list:
+        """Every panel that implements `set_tag_dictionary(d)`.
+
+        Add new panels here once they implement the protocol. Hosts created lazily
+        (image manager, dialogs, example cards) re-pull the dictionary on demand.
+        """
+        hosts = [
+            self.input_widget,
+            self.output_widget,
+            self.settings_panel,
+            self.interrogator_widget,
+            self.prompt_manager,
+            self._library_panel,
+            self.metadata_destroyer_widget,
+        ]
+        if hasattr(self, "_image_manager") and self._image_manager is not None:
+            hosts.append(self._image_manager)
+        return hosts
+
+    def _dispatch_tag_dictionary(self) -> None:
+        for host in self._tag_completion_hosts():
+            if hasattr(host, "set_tag_dictionary"):
+                host.set_tag_dictionary(self._tag_dictionary)
+
     def _new_workbench_session(self) -> None:
         self.input_widget.clear_text()
         self.output_widget.clear_output()
@@ -3119,6 +3139,7 @@ class MainWindow(QWidget):
         self._image_manager.use_as_example.connect(self._on_image_manager_example)
         self._image_manager.send_to_interrogator.connect(self._open_interrogator_with_images)
         self._image_manager.folder_changed.connect(self._on_image_manager_folder)
+        self._image_manager.set_tag_dictionary(self._tag_dictionary)
         self._image_manager.show()
         self._image_manager.load_initial_folder()
 
@@ -3770,7 +3791,7 @@ class MainWindow(QWidget):
         from .widgets.destroy_template_editor import DestroyTemplateEditor
         templates = list(self._state.settings.destroy_templates or self._DEFAULT_DESTROY_TEMPLATES)
         active = self._destroy_combo.currentIndex()
-        dialog = DestroyTemplateEditor(templates, active, self._translator, self)
+        dialog = DestroyTemplateEditor(templates, active, self._translator, self, tag_dictionary=self._tag_dictionary)
         if dialog.exec():
             self._state.settings.destroy_templates = dialog.templates()
             self._load_destroy_templates()

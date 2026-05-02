@@ -5,6 +5,20 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-05-02
+
+### Added
+- **TAG 补全全局覆盖** — 所有可编辑文本控件（QTextEdit / QPlainTextEdit / QLineEdit）默认挂上 Danbooru TAG 补全。覆盖到主输入、完整 / 无角色 TAG editor、例图 tags / 描述、Artist 名 / 触发词、OC 名 / tags / 服装、LLM 反推预设、设置面板各字段、prompt manager、销毁模板、metadata 销毁器（含动态 LoRA 行）、图像管理器搜索 / 重命名等
+- **工作台 chip 视图新增「✏ 编辑」按钮** — copy bar 左端显式切换 chip / editor 视图，编辑态下 TAG 补全直接可用；流式生成期间强制 editor，结束后回到用户选择的视图
+- **TagCompletionHost 协议接口** — 各 panel 实现 `set_tag_dictionary(d)`，window 启动时统一通过 `_dispatch_tag_dictionary()` 注入；新加的 panel 只要实现协议即可即插即用，window.py 无需逐个挂
+
+### Changed
+- **`tag_completer` 通用化** — `install_completer` 同时支持 QTextEdit、QPlainTextEdit、QLineEdit，新增 `install_completer_recursive(root, dict)` 一次性走树挂载。过滤只读 / 密码 / 显式 `noTagCompleter=True` 的控件；幂等，重复调用安全
+- **动态生成的子节点也参与覆盖** — `LibraryPanel._add_artist/_add_oc`、`OCBanner._add_outfit`、`MetadataDestroyer._add_lora_row`、`PromptManagerWidget._on_rows_inserted`、`ExampleWidget` 卡片新增时都会再调一次 recursive 把新控件接入
+
+### Fixed
+- **completer 延迟回调访问已销毁对象崩溃** — `_focus_out` 200ms 延迟、`_check_active` 500ms 轮询、textChanged 150ms 防抖三条 timer 路径都可能在 dialog/卡片销毁后触发，原代码裸调 `popup.hide()` / `edit.hasFocus()` 抛 `RuntimeError`。统一改走 `_safe_hide_popup` + `_popup_alive` 守卫（先 `sip.isdeleted` 再 `RuntimeError` 兜底），`_pick_info` / `_insert_tag` 也加 `_target_edit` 删除检查
+
 ## [0.9.4] - 2026-05-02
 
 ### Fixed

@@ -41,6 +41,8 @@
   "changelog": "Changelog",
   "changelog_empty": "No changelog found.",
   "output_waiting_tag": "Waiting for TAG",
+  "output_edit_mode": "✏ Edit",
+  "output_view_mode": "◧ Chips",
   "generation_running": "Generating",
   "generation_done": "Done",
   "generation_error": "Failed",

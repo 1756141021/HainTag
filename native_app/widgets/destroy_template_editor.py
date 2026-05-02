@@ -25,10 +25,11 @@ class DestroyTemplateEditor(QDialog):
     """Dialog for editing destroy text presets, similar to prompt manager style."""
 
     def __init__(self, templates: list[dict], active_index: int,
-                 translator: Translator, parent=None):
+                 translator: Translator, parent=None, tag_dictionary=None):
         super().__init__(parent)
         self._t = translator
         self._templates = [dict(t) for t in templates]  # deep copy
+        self._tag_dictionary = tag_dictionary or getattr(parent, "_tag_dictionary", None)
 
         p = current_palette()
         self.setWindowTitle(translator.t("metadata_edit_preset"))
@@ -145,6 +146,9 @@ class DestroyTemplateEditor(QDialog):
         if 0 <= active_index < len(self._templates):
             self._list.setCurrentRow(active_index)
         install_localized_context_menus(self, translator)
+        if self._tag_dictionary is not None:
+            from .tag_completer import install_completer_recursive
+            install_completer_recursive(self, self._tag_dictionary)
 
     def _populate_list(self):
         self._populating = True

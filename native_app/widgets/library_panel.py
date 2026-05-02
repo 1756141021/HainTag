@@ -423,6 +423,7 @@ class OCBanner(QWidget):
         super().__init__(parent)
         self._t = translator
         self._expanded = False
+        self._tag_dictionary = None
         p = _p()
 
         root = QVBoxLayout(self)
@@ -596,6 +597,11 @@ class OCBanner(QWidget):
         self._name_label.setText(text or self._t.t("character_name"))
         self.changed.emit()
 
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
+
     def _add_outfit(self, outfit=None):
         from ..models import OutfitEntry
         if not isinstance(outfit, OutfitEntry):
@@ -605,6 +611,9 @@ class OCBanner(QWidget):
         row.delete_requested.connect(self._remove_outfit)
         self._outfit_rows.append(row)
         self._outfit_list.addWidget(row)
+        if self._tag_dictionary is not None:
+            from .tag_completer import install_completer_recursive
+            install_completer_recursive(row, self._tag_dictionary)
         self.changed.emit()
 
     def retranslate_ui(self) -> None:
@@ -674,6 +683,7 @@ class LibraryPanel(QWidget):
         self._default_oc_order = 77
         self._default_oc_depth = 4
         self._loading_entries = False
+        self._tag_dictionary = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -837,12 +847,28 @@ class LibraryPanel(QWidget):
         self._add_artist_btn.setStyleSheet(style)
         self._add_oc_btn.setStyleSheet(style)
 
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
+        for banner in self._oc_banners:
+            banner.set_tag_dictionary(dictionary)
+
+    def _install_completer_on(self, widget) -> None:
+        if self._tag_dictionary is None:
+            return
+        from .tag_completer import install_completer_recursive
+        install_completer_recursive(widget, self._tag_dictionary)
+        if hasattr(widget, "set_tag_dictionary"):
+            widget.set_tag_dictionary(self._tag_dictionary)
+
     def _add_artist(self, entry: ArtistEntry | None = None):
         banner = ArtistBanner(self._t, self._storage, entry, self._scroll_inner)
         banner.changed.connect(self.changed.emit)
         banner.delete_requested.connect(self._remove_artist)
         self._artist_banners.append(banner)
         self._artist_list.addWidget(banner)
+        self._install_completer_on(banner)
         if entry is None:
             banner._toggle()
         if not self._loading_entries:
@@ -871,6 +897,7 @@ class LibraryPanel(QWidget):
         banner.delete_requested.connect(self._remove_oc)
         self._oc_banners.append(banner)
         self._oc_list.addWidget(banner)
+        self._install_completer_on(banner)
         if entry is None:
             banner._toggle()
         if not self._loading_entries:

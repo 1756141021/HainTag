@@ -294,7 +294,13 @@ class SettingsPanel(QWidget):
 
         self.stream_toggle.toggled.connect(self.settings_changed)
         self.memory_toggle.toggled.connect(self.settings_changed)
+        self._tag_dictionary = None
         self.retranslate_ui()
+
+    def set_tag_dictionary(self, dictionary) -> None:
+        from .tag_completer import install_completer_recursive
+        self._tag_dictionary = dictionary
+        install_completer_recursive(self, dictionary)
 
     def _add_label(self, parent: QWidget) -> QLabel:
         label = QLabel(parent)
