@@ -115,22 +115,46 @@ class TagDictionary:
         return None
 
     def search_prefix(self, prefix: str, limit: int = 15) -> list[TagInfo]:
-        """Return tags whose name or alias starts with *prefix*, ranked by count."""
+        """Return tags matching *prefix*, ranked by count.
+
+        ASCII queries: prefix-match `name` and `aliases` (English tag lookup).
+        CJK queries: substring-match `translation` (Chinese has no natural prefix
+        boundary — "女孩" should match both "1个女孩" and "女孩子").
+        """
         self._ensure_loaded()
-        prefix = self._normalize(prefix)
-        if not prefix:
+        if not prefix or not prefix.strip():
             return []
-        results: dict[str, TagInfo] = {}
+        if self._is_cjk(prefix):
+            needle = prefix.strip()
+            results: dict[str, TagInfo] = {}
+            for name, info in self._entries.items():
+                if info.translation and needle in info.translation:
+                    results[name] = info
+            ranked = sorted(results.values(), key=lambda t: t.count, reverse=True)
+            return ranked[:limit]
+        normalized = self._normalize(prefix)
+        if not normalized:
+            return []
+        results = {}
         for name, info in self._entries.items():
-            if name.startswith(prefix):
+            if name.startswith(normalized):
                 results[name] = info
             else:
                 for alias in info.aliases:
-                    if alias.startswith(prefix):
+                    if alias.startswith(normalized):
                         results[name] = info
                         break
         ranked = sorted(results.values(), key=lambda t: t.count, reverse=True)
         return ranked[:limit]
+
+    @staticmethod
+    def _is_cjk(text: str) -> bool:
+        for ch in text:
+            o = ord(ch)
+            # CJK Unified Ideographs, CJK Extension A, Hiragana, Katakana, Hangul
+            if 0x3040 <= o <= 0x30FF or 0x3400 <= o <= 0x9FFF or 0xAC00 <= o <= 0xD7AF:
+                return True
+        return False
 
     def __len__(self) -> int:
         return len(self._entries)

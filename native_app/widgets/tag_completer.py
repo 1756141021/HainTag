@@ -524,7 +524,9 @@ def install_completer(edit: TextEditor, dictionary: TagDictionary, min_chars: in
 
         pos = _editor_cursor_pos(edit)
         text = _editor_text(edit)
-        token_start = text.rfind(",", 0, pos)
+        # Honor both ASCII "," and Chinese "，" as tag separators so users typing
+        # in CJK input methods don't have their tokens span the whole field.
+        token_start = max(text.rfind(",", 0, pos), text.rfind("，", 0, pos))
         token_start = 0 if token_start == -1 else token_start + 1
         raw_token = text[token_start:pos]
         token = raw_token.strip()

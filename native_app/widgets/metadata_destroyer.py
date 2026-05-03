@@ -660,10 +660,8 @@ class MetadataDestroyerWidget(QWidget):
         )
 
     def _pick_files(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, self._translator.t("select_image"), "",
-            image_filter(self._translator),
-        )
+        from ..file_dialogs import pick_image_files
+        paths = pick_image_files(self, self._translator)
         if paths:
             self.process_files(paths)
 

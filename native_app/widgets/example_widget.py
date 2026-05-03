@@ -135,12 +135,8 @@ class ExampleWidget(QWidget):
         install_completer_recursive(self, dictionary)
 
     def _select_image(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            self._translator.t("select_image"),
-            "",
-            image_filter(self._translator),
-        )
+        from ..file_dialogs import pick_image_file
+        file_path = pick_image_file(self, self._translator)
         if not file_path:
             return
 

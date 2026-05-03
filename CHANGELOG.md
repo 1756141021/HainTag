@@ -5,6 +5,15 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.7] - 2026-05-03
+
+### Added
+- **TAG 补全支持中文查询** — `search_prefix` 检测 CJK 字符后走 substring 匹配 `translation` 字段，输入"女孩"能弹出 `1girl` / `multiple_girls` 等候选；ASCII 输入仍走原 prefix 匹配 `name` + `aliases`
+- **补全 token 切分识别中文逗号** — `_do_complete` 现在同时按 `,` 和 `，` 切 token，CJK 输入法用户写 "女孩，猫耳" 不会让整段当一个 token
+
+### Fixed
+- **图片选择对话框默认目录共享** — 例图卡 / OC 库参考图 / metadata 销毁器 / metadata 查看器以前都用 `""` 当起点，每次都掉到进程 cwd。新增 `file_dialogs.pick_image_file/pick_image_files` 帮手共享一个"上次图片目录"缓存，启动时从 `image_manager_folder` 注入，picking 后自动更新
+
 ## [0.9.6] - 2026-05-02
 
 ### Fixed

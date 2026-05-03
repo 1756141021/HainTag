@@ -171,7 +171,8 @@ class _RefImageGrid(QWidget):
             insert_pos += 1
 
     def _pick_image(self):
-        path, _ = QFileDialog.getOpenFileName(self, self._t.t("select_image"), "", image_filter(self._t))
+        from ..file_dialogs import pick_image_file
+        path = pick_image_file(self, self._t)
         if path:
             saved = self._storage.copy_library_image(path)
             self._paths.append(saved)

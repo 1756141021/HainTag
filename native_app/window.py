@@ -517,6 +517,12 @@ class MainWindow(QWidget):
         self._floating_tray.position_changed.connect(self._schedule_save)
         self._floating_tray.close_requested.connect(self._close_floating_tray)
 
+        # Seed shared image-picker last-directory cache so QFileDialog calls
+        # for example cards / metadata / library images / destroyer all open at
+        # the user's recent image folder rather than the process CWD.
+        from .file_dialogs import set_last_image_dir
+        set_last_image_dir(self._state.settings.image_manager_folder)
+
         # Tag dictionary lazy-loads CSV on first lookup — startup stays cheap.
         self._tag_dictionary = TagDictionary()
         csv_name = 'danbooru_all_2.csv'
@@ -3152,6 +3158,8 @@ class MainWindow(QWidget):
 
     def _on_image_manager_folder(self, folder: str) -> None:
         self._state.settings.image_manager_folder = folder
+        from .file_dialogs import set_last_image_dir
+        set_last_image_dir(folder)
         self._schedule_save()
 
     def _toggle_library(self) -> None:

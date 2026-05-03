@@ -347,10 +347,8 @@ class MetadataViewerWidget(QWidget):
         QApplication.clipboard().setText(text)
 
     def _pick_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, self._translator.t("select_image"), "",
-            image_filter(self._translator),
-        )
+        from ..file_dialogs import pick_image_file
+        path = pick_image_file(self, self._translator)
         if path:
             self.load_image(path)
 
