@@ -3,7 +3,7 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.8"`
+- 单一版本来源：`__version__ = "0.9.9"`
 - 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
 - 版本号遵循 SemVer（语义化版本）
 
@@ -28,6 +28,7 @@
 - **API 调用**：_handle_send_action 构建 payload → _start_worker 启动 ChatWorker → delta 路由到 OutputWidget，发送后清空输入框
 - **后台记忆**：_conversation_history 列表维护最近对话上下文，不在 UI 显示；成功回复后写入 user/assistant，右键输入框可清空记忆
 - **发送确认**：全局发送快捷键已下沉到 `InputWidget.install_send_key_handler()`；窗口层只消费 `send_requested`，发送模式由 `AppSettings.send_mode` 决定
+- **`_persist_current_history_output`**：将 editor 当前内容写回当前历史条目；如果新文本为空而条目已有内容则跳过（防止 `clear_output()` 在下一次生成前触发时把上一条记录清零）
 - **获取模型**：_fetch_models 从 API 拉取模型列表填充 QComboBox
 - **导出导入**：config bundle 和 prompts 的文件导出导入
 - **配置细分导入导出**：按 scope 列表导出/导入外观、模型参数、提示词、例图、库、布局和历史；导入时只合并勾选项

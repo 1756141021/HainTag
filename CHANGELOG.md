@@ -5,6 +5,11 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.9] - 2026-05-04
+
+### Fixed
+- **历史记录 token 数为零** — 新一次生成开始时 `clear_output()` 触发 `textChanged`→`_persist_current_history_output`，此时 editor 刚清空，`_worker` 尚未启动（guard 失效），导致上一条历史记录的 `output_text` 被空字符串覆盖，时间轴显示 0 tokens。现在加一条守卫：若新文本为空而旧条目已有内容，直接跳过，不覆盖
+
 ## [0.9.8] - 2026-05-04
 
 ### Fixed

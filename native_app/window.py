@@ -2442,6 +2442,8 @@ class MainWindow(QWidget):
         if entry is None or self._syncing_history_output or self._worker is not None:
             return
         output_text = self.output_widget.full_editor.toPlainText().strip()
+        if not output_text and entry.output_text:
+            return
         nochar_text = self.output_widget.nochar_editor.toPlainText().strip()
         tag_categories = self.output_widget.tag_categories()
         if (
