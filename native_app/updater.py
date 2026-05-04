@@ -182,7 +182,7 @@ class UpdateDownloadWorker(QThread):
                 if bad:
                     raise RuntimeError(self._t.t("update_zip_corrupt").format(file=bad))
                 names = [n.lower().replace("\\", "/") for n in zf.namelist()]
-                if not any(n == "haintag/haintag.exe" for n in names):
+                if not any(n.endswith("/haintag.exe") or n == "haintag.exe" for n in names):
                     raise RuntimeError(self._t.t("update_zip_missing_exe"))
 
             if self._cancelled:
@@ -275,8 +275,10 @@ class UpdateDownloadWorker(QThread):
 
 def _generate_update_script(pid: int, source_dir: str,
                             target_dir: str, exe_path: str,
-                            failed_message: str = "Update failed") -> str:
+                            failed_message: str = "Update failed",
+                            cleanup_dir: str | None = None) -> str:
     """Write a batch script with baked-in paths and return its path."""
+    clean_target = cleanup_dir or source_dir
     content = (
         '@echo off\n'
         'chcp 65001 >nul 2>&1\n'
@@ -284,12 +286,12 @@ def _generate_update_script(pid: int, source_dir: str,
         f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul && '
         '(timeout /t 1 /nobreak >nul & goto wait)\n'
         'timeout /t 1 /nobreak >nul\n'
-        f'robocopy "{source_dir}\\HainTag" "{target_dir}" '
+        f'robocopy "{source_dir}" "{target_dir}" '
         '/MIR /R:3 /W:2 /NP /NFL /NDL /NJH /NJS\n'
         f'if %errorlevel% GTR 7 (echo {failed_message} & pause & goto end)\n'
         f'start "" "{exe_path}"\n'
         ':end\n'
-        f'rd /s /q "{source_dir}" >nul 2>&1\n'
+        f'rd /s /q "{clean_target}" >nul 2>&1\n'
         '(goto) 2>nul & del "%~f0"\n'
     )
     path = os.path.join(tempfile.gettempdir(), "haintag_update.bat")

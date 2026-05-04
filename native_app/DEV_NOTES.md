@@ -3,7 +3,7 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.3"`
+- 单一版本来源：`__version__ = "0.9.8"`
 - 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
 - 版本号遵循 SemVer（语义化版本）
 
@@ -86,6 +86,7 @@
   - 同 depth 内按 `order` 升序作为整块 splice
 - 记忆模式接收 `history`：原序逐条 append，过滤空内容/非法 role
 - `_entry_block()`：把 PromptEntry / OCEntry / ExampleEntry 转成 `[{role, content}, ...]` 块；OC = `user(Character: 名)` + `assistant(merged_tags)` 双消息
+- `_format_example()`：例图格式化为 assistant message；tags 在拼入前过滤 `<lora:[^>]+>` token；格式字符串里包含明确约束"禁止照搬此处 tags，须根据当前描述重新生成"，防止 AI 把例图 tags 整块复读到输出
 - `normalize_api_base_url()`：清理 API URL，剥掉尾部 `/chat/completions`
 - `extract_active_input()`：记忆模式整段保留；非记忆模式按 `---` 切，只取最后一段
 - `validate_examples()`：例图必须同时有描述和标签
@@ -228,17 +229,18 @@
 - **UpdateDownloadWorker**（QThread）：下载 + 验证 + 解压更新 ZIP
   - 信号：`progress(str, int)` / `download_done(str)` / `error(str)`
   - 三级 HTTP fallback 分块下载（8KB chunks），每 chunk 检查取消标志
-  - 验证：`zipfile.testzip()` + 确认 `HainTag/HainTag.exe` 存在
+  - 验证：`zipfile.testzip()` + 确认任意路径下存在 `haintag.exe`（支持 flat 和子目录两种 ZIP 结构）
   - 解压到临时目录，删除 ZIP，emit `download_done(extracted_dir)`
-- **`_generate_update_script()`**：生成 batch 替换脚本写入 %TEMP%
-  - 等待旧 PID 退出 → `robocopy /MIR` 镜像替换 → 启动新 exe → 自删除
+- **`_generate_update_script(pid, source_dir, target_dir, exe_path, failed_message, cleanup_dir)`**：生成 batch 替换脚本写入 %TEMP%
+  - 等待旧 PID 退出 → `robocopy /MIR source_dir→target_dir` → 启动新 exe → 清理 `cleanup_dir`（默认 `source_dir`）→ 自删除
+  - `source_dir` 由调用方传入已解析的目录（不再硬编码 `\\HainTag` 子目录）
 - **UpdateDialog**（QDialog）：更新提示弹窗
   - 显示新版本号 + changelog
   - 三个按钮：立即更新 / 跳过此版本（存 skipped_version）/ 下次提醒
   - 点击更新后：隐藏按钮，显示进度条 + 取消按钮，下载完成后 accept
   - 源码模式（`sys.frozen` 不存在）fallback 打开浏览器
 - **NoUpdateDialog**：已是最新版提示
-- window.py 中：`_check_update_auto()`（启动 3s 后自动，尊重 skipped_version）/ `check_update_manual()`（设置面板按钮，忽略 skip）/ `_apply_update()`（写脚本 → 保存状态 → 启动脚本 → 退出）
+- window.py 中：`_check_update_auto()`（启动 3s 后自动，尊重 skipped_version）/ `check_update_manual()`（设置面板按钮，忽略 skip）/ `_apply_update()`（自动探测 `HainTag/` 子目录，决定 robocopy 源路径，写脚本 → 保存状态 → 启动脚本 → 退出）
 
 ## resources/
 - `resources/lang/zh-CN.json`：中文翻译（所有 UI 字符串）

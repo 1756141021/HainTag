@@ -5,6 +5,13 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.8] - 2026-05-04
+
+### Fixed
+- **例图无限增殖** — `file_dialogs.py` 的全局"上次目录"被污染成 `examples_dir` 后，例图选择器打开就落在 examples 里，用户选已有 UUID 文件会触发 `copy_example_image` 制造副本。现在 `_select_image` 检测文件是否已在 `examples_dir`，若是则直接复用路径，不再复制
+- **自动更新报"没有 exe 文件"** — ZIP 校验仅接受 `HainTag/HainTag.exe` 子目录结构，flat 打包直接失败。放宽为任意路径下存在 `haintag.exe` 即通过；`_apply_update` 自动探测 ZIP 解压后是否有 `HainTag/` 子目录，据此设定 robocopy 源路径；清理目录也升级为清理整个 temp 目录
+- **例图 tags 照搬到输出** — 例图作为 assistant message 发给 AI，AI 把整个 tag 列表（含 `<lora:...>`）原封不动复读到输出。现在 `_format_example` 一并处理：过滤 lora token 避免触发权重引用；在格式里加明确约束"禁止照搬，须根据当前描述重新生成"，让 AI 只作风格参考
+
 ## [0.9.7] - 2026-05-03
 
 ### Added

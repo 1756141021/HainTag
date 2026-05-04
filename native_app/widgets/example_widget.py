@@ -151,9 +151,16 @@ class ExampleWidget(QWidget):
             pass
 
         try:
-            if self._image_path:
-                self._storage.remove_example_image(self._image_path)
-            self._image_path = self._storage.copy_example_image(file_path)
+            examples_dir = self._storage.examples_dir
+            already_managed = Path(file_path).resolve().parent == examples_dir.resolve()
+            if already_managed:
+                if self._image_path and Path(self._image_path).resolve() != Path(file_path).resolve():
+                    self._storage.remove_example_image(self._image_path)
+                self._image_path = file_path
+            else:
+                if self._image_path:
+                    self._storage.remove_example_image(self._image_path)
+                self._image_path = self._storage.copy_example_image(file_path)
         except Exception as exc:
             self.error_occurred.emit(
                 self._translator.t("error_example_image_failed"),

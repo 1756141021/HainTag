@@ -33,8 +33,11 @@ def validate_examples(examples: Iterable[ExampleEntry]) -> list[str]:
 
 
 def _format_example(entry: ExampleEntry, index: int) -> str:
-    """Format an example entry as a single assistant message."""
-    return f"例图{index}：\n画面描述：{entry.description.strip()}\n```\n{entry.tags.strip()}\n```"
+    clean_tags = re.sub(r'<lora:[^>]+>', '', entry.tags.strip()).strip().strip(',').strip()
+    return (
+        f"例图{index}（仅供风格与质量参考，生成时禁止照搬此处的 tags，须根据当前描述重新生成）：\n"
+        f"画面描述：{entry.description.strip()}\n```\n{clean_tags}\n```"
+    )
 
 
 def _entry_block(entry, example_index: int) -> tuple[list[dict[str, str]], int]:

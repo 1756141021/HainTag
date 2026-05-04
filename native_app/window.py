@@ -3740,12 +3740,15 @@ class MainWindow(QWidget):
         import os
         import subprocess
         from .updater import _generate_update_script
+        subdir = os.path.join(extracted_dir, "HainTag")
+        source_dir = subdir if os.path.isdir(subdir) else extracted_dir
         script = _generate_update_script(
             pid=os.getpid(),
-            source_dir=extracted_dir,
+            source_dir=source_dir,
             target_dir=os.path.dirname(sys.executable),
             exe_path=sys.executable,
             failed_message=self._translator.t("update_apply_failed"),
+            cleanup_dir=extracted_dir,
         )
         self._persist_state()
         subprocess.Popen(
