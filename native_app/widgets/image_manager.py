@@ -5,8 +5,6 @@ All colors from palette (DARK_PALETTE / LIGHT_PALETTE), theme-following.
 """
 from __future__ import annotations
 
-import ctypes
-import ctypes.wintypes
 import os
 import sys
 import shutil
@@ -64,6 +62,8 @@ _LIKE_BADGE_COLOR = "#c84646"
 
 # Win32 constants for frameless window resize
 if sys.platform == "win32":
+    import ctypes
+    import ctypes.wintypes
     _GWL_STYLE = -16
     _WS_THICKFRAME = 0x00040000
     _WS_SYSMENU = 0x00080000
