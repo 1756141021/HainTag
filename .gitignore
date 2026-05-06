@@ -36,3 +36,5 @@ DEV_NOTES.md
 DEVELOPMENT_MEMORY.md
 AITagGenerator.spec
 danbooru_all_2.csv
+.DS_Store
+**/.DS_Store
