@@ -237,11 +237,16 @@ class MainWindow(QWidget):
         self._settings_anim.finished.connect(self._finish_settings_animation)
 
         self.setObjectName('AppWindow')
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        # macOS: keep the native title bar so traffic lights / native resize / tiling work.
+        # Plan B fallback for v1 — the transparent-titlebar route is deferred to a later PR.
+        if sys.platform == 'darwin':
+            self.setWindowFlags(Qt.WindowType.Window)
+        else:
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(_dp(720), _dp(480))
         self.setWindowTitle(self._translator.t('app_title'))
-        icon_path = Path(__file__).parent / 'resources' / 'icon.png'
+        icon_path = Path(__file__).parent / 'resources' / 'icon.ico'
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -269,6 +274,10 @@ class MainWindow(QWidget):
         self.btn_close = self._create_title_button('×', self.close, object_name='CloseButton')
         for button in [self.btn_language, self.btn_settings, self.btn_gallery, self.btn_help, self.btn_pin, self.btn_min, self.btn_max, self.btn_close]:
             title_layout.addWidget(button)
+        # macOS uses the native title bar's traffic lights; hide our custom min/max/close.
+        if sys.platform == 'darwin':
+            for button in (self.btn_min, self.btn_max, self.btn_close):
+                button.hide()
         self._set_button_active(self.btn_settings, False)
         self._set_button_active(self.btn_pin, False)
 
