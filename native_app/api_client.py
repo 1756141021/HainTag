@@ -236,13 +236,29 @@ class ChatWorker(QThread):
 
     def _emit_http_error(self, status_code: int, detail: str) -> None:
         clean_detail = (detail or "").strip()
-        if status_code in (401, 403):
+        effective_code = self._unwrap_nested_code(status_code, clean_detail)
+        if effective_code in (401, 403):
             message = "Authentication failed - check API Key"
-        elif status_code == 429:
+        elif effective_code == 429:
             message = "Rate limited - try again later"
         elif status_code:
             message = f"HTTP {status_code}"
         else:
             lines = clean_detail.splitlines() if clean_detail else []
             message = lines[0][:220] if lines else "Request failed"
-        self.error_received.emit(message, status_code, clean_detail or message)
+        self.error_received.emit(message, effective_code, clean_detail or message)
+
+    def _unwrap_nested_code(self, status_code: int, detail: str) -> int:
+        if status_code in (401, 403, 429) or not detail:
+            return status_code
+        try:
+            outer = json.loads(detail)
+            inner_str = (outer.get('error') or {}).get('message', '')
+            if isinstance(inner_str, str) and inner_str.strip().startswith('{'):
+                inner = json.loads(inner_str)
+                code = (inner.get('error') or {}).get('code')
+                if isinstance(code, int):
+                    return code
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
+        return status_code

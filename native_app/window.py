@@ -2670,8 +2670,9 @@ class MainWindow(QWidget):
             # URL/connection errors — show in output only, open settings
             if not self.settings_panel.is_open():
                 self._set_settings_open(True)
-        else:
+        elif status_code != 429:
             # HTTP errors (401, 502, etc.) — also generate error report
+            # 429 rate limits are expected and not worth reporting
             action = 'summary' if self._current_mode == 'summary' else 'send'
             self._report_issue(
                 'request_error',

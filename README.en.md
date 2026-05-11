@@ -31,12 +31,35 @@ Everything stays local. No cloud, no telemetry, no data leaves your machine.
 
 ### Download
 
+#### Windows
+
 Head to **[Releases](https://github.com/1756141021/HainTag/releases)** and grab the latest `.zip`.
 
-1. Extract anywhere
-2. Run `HainTag.exe` — no installer needed
+1. Download `HainTag-vX.X.X-windows.zip`
+2. Extract anywhere
+3. Run `HainTag.exe` — no installer needed
 
 > **Requires** Windows 10/11, 64-bit
+
+#### macOS
+
+macOS currently runs from source. HainTag is a standalone desktop app, not a ComfyUI custom node. Do not put it in `ComfyUI/custom_nodes` or a node directory.
+
+Choose any folder for the app code. This example puts it in `~/Applications/HainTag`:
+
+```bash
+cd ~/Applications
+git clone https://github.com/1756141021/HainTag.git
+cd HainTag
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m native_app
+```
+
+If `git clone` fails while `Receiving objects` or `Unpacking objects`, delete the incomplete `~/Applications/HainTag` folder and run the `git clone` step again. You can also clone into another parent folder, such as `~/Downloads`.
+
+The app code folder is only where the program lives. User data is stored in `~/Library/Application Support/HainTag/`.
 
 ---
 
@@ -129,12 +152,7 @@ Drag any card out of the main window into an independent floating panel. Pin the
 
 ### Run from Source
 
-```bash
-git clone https://github.com/1756141021/HainTag.git
-cd HainTag
-pip install -r requirements.txt
-python -m native_app
-```
+If you are not using the Windows release package, follow the macOS source-run steps above. The important part is to choose a parent folder first, then clone the repo as its `HainTag` subfolder, such as `~/Applications/HainTag`.
 
 ---
 

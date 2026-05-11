@@ -77,6 +77,7 @@
 - 信号：delta_received、summary_received、error_received、cancelled、finished_cleanly
 - 空 choices 防护（避免 IndexError）
 - 取消时 drain response（避免 ResponseNotRead）
+- `_unwrap_nested_code()`：代理返回 500 但内嵌真实错误码时（如代理把上游 429 包在 500 里），解析 `error.message` JSON 提取实际 code，确保 429 rate limit 被正确识别
 
 ## logic.py
 - `build_messages()`：把提示词 + 例图 + 用户输入组装成 API messages 数组，**SillyTavern 风格深度**

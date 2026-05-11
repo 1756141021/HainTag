@@ -5,6 +5,16 @@ All notable changes to HainTag will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.9.10] - 2026-05-11
+
+### Fixed
+- **代理包装的 rate limit 识别** — 代理返回 HTTP 500 但 `error.message` 内嵌上游 429 JSON 时，解析真实错误码并按 rate limit 处理，避免误生成错误报告
+
+### Documentation
+- **macOS 源码运行说明补全** — README 明确 HainTag 是独立桌面应用，不是 ComfyUI 节点；给出 `~/Applications/HainTag` 作为 `git clone` 目标目录，并说明 git 解包失败时删除未完整下载的目录后重新 clone，用户数据位置为 `~/Library/Application Support/HainTag/`
+
 ## [0.9.9] - 2026-05-04
 
 ### Fixed

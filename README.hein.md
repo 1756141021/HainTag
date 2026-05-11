@@ -136,11 +136,25 @@
 
 ### 怎么用
 
-从 **[Releases](https://github.com/1756141021/HainTag/releases)** 下载，解压，双击 `HainTag.exe`，就这样。
+Windows 直接从 **[Releases](https://github.com/1756141021/HainTag/releases)** 下载，解压，双击 `HainTag.exe`，就这样。
+
+macOS 现在要从源码跑。它不是 ComfyUI 节点，不要放进 `custom_nodes` 或 node 目录。程序放哪里都行，比如放到 `~/Applications/HainTag`：
+
+```bash
+cd ~/Applications
+git clone https://github.com/1756141021/HainTag.git
+cd HainTag
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m native_app
+```
+
+如果 git 在解包时报错，把没下完整的 `~/Applications/HainTag` 删掉，再重新 `git clone`。也可以换到 `~/Downloads` 之类的目录再试。
 
 第一次打开会让你填 API 地址和 Key。什么 API 都行，只要兼容 OpenAI 格式——OpenAI 本家、DeepSeek、本地跑的 Ollama……都可以。
 
-> 需要 Windows 10 或 11，64 位。
+> Windows 需要 Windows 10 或 11，64 位。macOS 用户数据在 `~/Library/Application Support/HainTag/`。
 
 ---
 
@@ -157,15 +171,6 @@ OC 也靠近手边了。标题栏的 `+` 会在原地弹出角色选择，选完
 还有那个存放台……嗯，它现在会更识趣一点。多个浮动卡片靠在一起时可以收进去；如果里面只剩一个卡片，它会把卡片还回来，自己消失，不会一直站在那里碍眼。
 
 右键菜单、资料库、历史、图像反推、自动补全这些地方也重新接了主题、字体、缩放和语言接口。你在设置里改字体、改背景、改语言，它们应该一起跟着变。
-
-如果你想从源码跑：
-
-```bash
-git clone https://github.com/1756141021/HainTag.git
-cd HainTag
-pip install -r requirements.txt
-python -m native_app
-```
 
 ---
 
