@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
 
 from .models import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH
@@ -15,6 +16,11 @@ def _dpi_scale() -> float:
         from PyQt6.QtWidgets import QApplication
         screen = QApplication.primaryScreen()
         if screen is not None:
+            # macOS uses logicalDPI=72 as a historical convention. Qt already
+            # handles UI scaling internally at that DPI baseline, and Retina
+            # backing scale is handled by the OS — don't double-scale on top.
+            if sys.platform == "darwin":
+                return 1.0
             return max(0.75, min(3.0, screen.logicalDotsPerInch() / 96.0))
     except Exception:
         pass
