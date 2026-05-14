@@ -7,6 +7,12 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-05-13
+
+### Fixed
+- **Metadata 销毁器临时结果残留** — 销毁结果改为按可见结果生命周期清理，清空结果、开始下一轮处理或关闭窗口时都会释放 `aitag_destroy_*` 临时文件
+- **资料库参考图残留** — 删除 Artist / OC 条目或导入替换资料库时，同步回收 `%APPDATA%\HainTag\library_images` 中失去引用的托管图片
+
 ## [0.9.10] - 2026-05-11
 
 ### Fixed

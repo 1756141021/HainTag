@@ -3,7 +3,7 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.9"`
+- 单一版本来源：`__version__ = "0.9.11"`
 - 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
 - 版本号遵循 SemVer（语义化版本）
 
@@ -30,7 +30,7 @@
 - **发送确认**：全局发送快捷键已下沉到 `InputWidget.install_send_key_handler()`；窗口层只消费 `send_requested`，发送模式由 `AppSettings.send_mode` 决定
 - **`_persist_current_history_output`**：将 editor 当前内容写回当前历史条目；如果新文本为空而条目已有内容则跳过（防止 `clear_output()` 在下一次生成前触发时把上一条记录清零）
 - **获取模型**：_fetch_models 从 API 拉取模型列表填充 QComboBox
-- **导出导入**：config bundle 和 prompts 的文件导出导入
+- **导出导入**：config bundle 和 prompts 的文件导出导入；导入替换 Artist / OC 资料库时会回收旧条目失去引用的托管参考图
 - **配置细分导入导出**：按 scope 列表导出/导入外观、模型参数、提示词、例图、库、布局和历史；导入时只合并勾选项
 - **外观菜单**：主题切换（暗/亮）、卡片透明度、UI 缩放、字体大小、字体 profile
 - **状态保存**：窗口位置/大小、所有卡片位置、设置、提示词、例图 → settings.json
@@ -61,10 +61,10 @@
   - `_state.py` — `StateStorage`：load_state / save_state → `settings.json`。save 走 `tmp + os.replace` 原子写；遇 Windows 临时锁（AV / OneDrive 扫文件）有三档退避重试（50/150/400ms），全失败时回退直写
   - `_likes.py` — `LikesStorage`：load_likes / save_likes → `likes.json`
   - `_hints.py` — `HintsStorage`：load_shown_hints / save_shown_hints → `hints.json`
-  - `_library.py` — `LibraryStorage`：load/save_library + copy/remove_library_image → `library.json` + `library_images/`
+  - `_library.py` — `LibraryStorage`：load/save_library + copy/remove_library_image → `library.json` + `library_images/`；删除只作用于托管目录内文件，路径判断按 Windows 大小写不敏感规则处理
   - `_history.py` — `HistoryStorage`：load/save/append/clear_history → `history.json`；统一做 newest-first 排序、按保留天数清理、内部上限 500 条
   - `_fonts.py` — `FontStorage`：import_font / list_imported_fonts / font_file_path / load_imported_fonts → `fonts/index.json`
-  - `_examples.py` — `ExampleStorage`：copy/save/remove_example_image + serialize/deserialize → `examples/`
+  - `_examples.py` — `ExampleStorage`：copy/save/remove_example_image + serialize/deserialize → `examples/`；删除只作用于托管目录内文件，避免误删外部原图
   - `_prompts.py` — `PromptStorage`：export/import_prompts（无状态，纯 JSON IO）
   - `_config_bundle.py` — `ConfigBundleStorage`：export/import_config_bundle + scoped merge/state/library/history restore（跨域协调器，注入 FontStorage + ExampleStorage）
   - `_error_reports.py` — `ErrorReportStorage`：write_error_report → `reports/`

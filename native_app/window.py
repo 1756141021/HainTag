@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import time
 import traceback
@@ -2928,6 +2929,21 @@ class MainWindow(QWidget):
                 extra_context={'scope': normalized_scopes, 'target_file': Path(path).name},
             )
 
+    def _library_reference_paths(self, artists, ocs) -> dict[str, str]:
+        paths: dict[str, str] = {}
+        for entry in [*artists, *ocs]:
+            for path in entry.reference_images:
+                if path:
+                    paths[os.path.normcase(path)] = path
+        return paths
+
+    def _remove_obsolete_library_images(self, old_artists, old_ocs, new_artists, new_ocs) -> None:
+        old_paths = self._library_reference_paths(old_artists, old_ocs)
+        new_paths = self._library_reference_paths(new_artists, new_ocs)
+        for key, path in old_paths.items():
+            if key not in new_paths:
+                self._storage.remove_library_image(path)
+
     def _import_config_bundle(self, scopes: str | list[str]) -> None:
         normalized_scopes = self._normalize_config_scopes(scopes)
         if not normalized_scopes:
@@ -2946,13 +2962,16 @@ class MainWindow(QWidget):
             imported_state = self._storage.state_from_bundle(bundle, current_state, normalized_scopes)
             self._apply_full_profile_state(imported_state)
 
+            current_artists = self._library_panel.artist_entries()
+            current_ocs = self._library_panel.oc_entries()
             artists, ocs = self._storage.library_from_bundle(
                 bundle,
-                self._library_panel.artist_entries(),
-                self._library_panel.oc_entries(),
+                current_artists,
+                current_ocs,
                 normalized_scopes,
             )
             if CONFIG_SCOPE_ARTIST_LIBRARY in normalized_scopes or CONFIG_SCOPE_OC_LIBRARY in normalized_scopes:
+                self._remove_obsolete_library_images(current_artists, current_ocs, artists, ocs)
                 self._library_panel.set_entries(artists, ocs)
                 self._storage.save_library(artists, ocs)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -31,9 +32,12 @@ class ExampleStorage:
         if not image_path:
             return
         try:
-            path = Path(image_path)
-            if path.exists() and self._paths.examples_dir in path.parents:
-                path.unlink()
+            path = Path(image_path).resolve()
+            examples_dir = self._paths.examples_dir.resolve()
+            path_key = os.path.normcase(str(path))
+            dir_key = os.path.normcase(str(examples_dir))
+            if path.exists() and path_key.startswith(dir_key + os.sep):
+                path.unlink(missing_ok=True)
         except OSError:
             return
 

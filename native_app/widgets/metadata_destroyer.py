@@ -173,7 +173,8 @@ class MetadataDestroyerWidget(QWidget):
         self._translator = translator
         self._writer = MetadataWriter()
         self._workers: list[_DestroyWorker] = []
-        self._temp_dir = tempfile.mkdtemp(prefix="aitag_destroy_")
+        self._temp_dir: str | None = None
+        self._result_paths: set[str] = set()
         self._destroy_text: str | None = None  # None = use default
         self._state = "empty"  # "empty" | "single" | "batch"
         self._edit_mode = False  # False=destroy, True=edit
@@ -287,11 +288,14 @@ class MetadataDestroyerWidget(QWidget):
         self._state = "empty"
         self._single_dst = ""
         self._edit_mode = False
+        self._preview_label.set_file_path("")
+        self._preview_label.clear()
         self._preview_label.setVisible(False)
         self._single_bar.setVisible(False)
         self._batch_header.setVisible(False)
         self._scroll.setVisible(False)
         self._clear_result_widgets()
+        self._clear_result_files()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update()
 
@@ -304,6 +308,27 @@ class MetadataDestroyerWidget(QWidget):
                 w.setParent(None)
                 w.deleteLater()
 
+    def _ensure_temp_dir(self) -> str:
+        if self._temp_dir is None:
+            self._temp_dir = tempfile.mkdtemp(prefix="aitag_destroy_")
+        return self._temp_dir
+
+    def _clear_result_files(self) -> None:
+        for path in list(self._result_paths):
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        self._result_paths.clear()
+        if self._temp_dir:
+            try:
+                temp_path = Path(self._temp_dir)
+                if temp_path.exists() and not any(temp_path.iterdir()):
+                    temp_path.rmdir()
+                    self._temp_dir = None
+            except OSError:
+                pass
+
     def process_files(self, paths: list[str]) -> None:
         valid = [p for p in paths if os.path.isfile(p) and Path(p).suffix.lower() in _IMAGE_EXTS]
         if not valid:
@@ -315,13 +340,17 @@ class MetadataDestroyerWidget(QWidget):
             self._start_batch(valid)
 
     def _start_single(self, path: str) -> None:
+        self._preview_label.set_file_path("")
+        self._preview_label.clear()
+        self._clear_result_widgets()
+        self._clear_result_files()
         self._state = "single"
         self._single_src = path
         self._single_src_name = os.path.basename(path)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
         fname = os.path.basename(path)
-        dst = os.path.join(self._temp_dir, f"destroyed_{fname}")
+        dst = os.path.join(self._ensure_temp_dir(), f"destroyed_{fname}")
 
         self._single_name_label.setText(f"\u27f3 {fname}...")
         self._preview_label.setText("\u27f3")
@@ -331,7 +360,6 @@ class MetadataDestroyerWidget(QWidget):
         self._scroll.setVisible(False)
         self._single_edit_btn.setEnabled(False)
         self._single_edit_btn.setVisible(True)
-        self._clear_result_widgets()
 
         worker = _DestroyWorker(self._writer, path, dst, self._destroy_text)
         worker.finished.connect(self._on_single_done)
@@ -345,6 +373,7 @@ class MetadataDestroyerWidget(QWidget):
             self._single_name_label.setText(f"\u2717 {fname}: {error}")
             return
         self._single_dst = dst_path
+        self._result_paths.add(dst_path)
         self._preview_label.set_file_path(dst_path)
         self._single_name_label.setText(f"\u2713 {fname}")
         self._single_edit_btn.setEnabled(True)
@@ -602,17 +631,21 @@ class MetadataDestroyerWidget(QWidget):
             self._writer.edit(self._single_src, dst, self._edit_meta)
 
     def _start_batch(self, paths: list[str]) -> None:
+        self._preview_label.set_file_path("")
+        self._preview_label.clear()
+        self._clear_result_widgets()
+        self._clear_result_files()
         self._state = "batch"
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self._preview_label.setVisible(False)
         self._single_bar.setVisible(False)
         self._batch_header.setVisible(True)
         self._scroll.setVisible(True)
-        self._clear_result_widgets()
 
+        temp_dir = self._ensure_temp_dir()
         for path in paths:
             fname = os.path.basename(path)
-            dst = os.path.join(self._temp_dir, f"destroyed_{fname}")
+            dst = os.path.join(temp_dir, f"destroyed_{fname}")
             busy = QLabel(f"\u27f3 {fname}...", self._results_content)
             self._results_layout.insertWidget(self._results_layout.count() - 1, busy)
             worker = _DestroyWorker(self._writer, path, dst, self._destroy_text)
@@ -627,6 +660,8 @@ class MetadataDestroyerWidget(QWidget):
     def _on_batch_done(self, src: str, dst_path: str, error: str, busy_label: QLabel) -> None:
         busy_label.setParent(None)
         busy_label.deleteLater()
+        if dst_path:
+            self._result_paths.add(dst_path)
         row = _ResultRow(os.path.basename(src), dst_path, error, self._translator, self._results_content)
         self._results_layout.insertWidget(self._results_layout.count() - 1, row)
         self._update_batch_header()
@@ -698,10 +733,16 @@ class MetadataDestroyerWidget(QWidget):
                 self._preview_label.setPixmap(scaled)
 
     def cleanup_temp(self) -> None:
-        try:
-            shutil.rmtree(self._temp_dir, ignore_errors=True)
-        except Exception:
-            pass
+        self._preview_label.set_file_path("")
+        self._preview_label.clear()
+        self._clear_result_widgets()
+        self._result_paths.clear()
+        if self._temp_dir:
+            try:
+                shutil.rmtree(self._temp_dir, ignore_errors=True)
+            except Exception:
+                pass
+            self._temp_dir = None
 
 
 def _safe_int(value: str, fallback: int) -> int:

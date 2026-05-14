@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -45,6 +46,14 @@ class LibraryStorage:
 
     def remove_library_image(self, image_path: str) -> None:
         """Remove an image if it's inside library_images dir."""
-        p = Path(image_path)
-        if p.exists() and self._paths.library_images_dir in p.parents:
-            p.unlink(missing_ok=True)
+        if not image_path:
+            return
+        try:
+            path = Path(image_path).resolve()
+            images_dir = self._paths.library_images_dir.resolve()
+            path_key = os.path.normcase(str(path))
+            dir_key = os.path.normcase(str(images_dir))
+            if path.exists() and path_key.startswith(dir_key + os.sep):
+                path.unlink(missing_ok=True)
+        except OSError:
+            return

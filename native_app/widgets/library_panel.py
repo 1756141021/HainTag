@@ -186,6 +186,11 @@ class _RefImageGrid(QWidget):
             self._rebuild()
             self.changed.emit()
 
+    def remove_assets(self) -> None:
+        for path in self._paths:
+            self._storage.remove_library_image(path)
+        self._paths.clear()
+
 
 # ═══════════════════════════════════════════════════════════
 #  Artist Banner
@@ -341,6 +346,9 @@ class ArtistBanner(QWidget):
             reference_images=self._ref_grid.paths(),
             enabled=True,
         )
+
+    def remove_assets(self) -> None:
+        self._ref_grid.remove_assets()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -658,6 +666,9 @@ class OCBanner(QWidget):
             enabled=self._enabled.isChecked(),
         )
 
+    def remove_assets(self) -> None:
+        self._ref_grid.remove_assets()
+
 
 # ═══════════════════════════════════════════════════════════
 #  Library Panel — Two-Step Scroll Drawer
@@ -881,6 +892,7 @@ class LibraryPanel(QWidget):
 
     def _remove_artist(self, banner):
         if banner in self._artist_banners:
+            banner.remove_assets()
             self._artist_banners.remove(banner)
             self._artist_list.removeWidget(banner)
             banner.deleteLater()
@@ -920,6 +932,7 @@ class LibraryPanel(QWidget):
 
     def _remove_oc(self, banner):
         if banner in self._oc_banners:
+            banner.remove_assets()
             self._oc_banners.remove(banner)
             self._oc_list.removeWidget(banner)
             banner.deleteLater()
