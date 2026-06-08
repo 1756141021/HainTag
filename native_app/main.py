@@ -72,12 +72,11 @@ def main() -> int:
         if settings.theme == 'custom' and settings.custom_bg_image:
             from .theme import extract_palette_from_image
             custom_palette = extract_palette_from_image(settings.custom_bg_image)
-        from .font_loader import FONT_PROFILES
-        if settings.custom_font_id and custom_family:
-            font_family_css = f'"{custom_family}", sans-serif'
-        else:
-            ff_list = FONT_PROFILES.get(settings.font_profile, FONT_PROFILES['default'])
-            font_family_css = ', '.join(f'"{f}"' for f in ff_list) + ', sans-serif'
+        from .font_loader import font_family_css as _font_family_css
+        font_family_css = _font_family_css(
+            settings.font_profile,
+            custom_family if settings.custom_font_id else '',
+        )
         app.setStyleSheet(scale_qss(generate_qss(
             settings.theme, custom_palette=custom_palette,
             card_opacity=settings.card_opacity, brightness=settings.bg_brightness,

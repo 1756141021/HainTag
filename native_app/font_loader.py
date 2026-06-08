@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PyQt6.QtGui import QFont, QFontDatabase
@@ -19,6 +20,46 @@ FONT_PROFILES: dict[str, list[str]] = {
     'yahei': ['Microsoft YaHei UI', 'Segoe UI'],
     'segoe': ['Segoe UI', 'Microsoft YaHei UI'],
 }
+
+
+def _system_ui_families() -> list[str]:
+    """The native UI / CJK font(s) for the running platform.
+
+    Appended as a guaranteed fallback so the app uses the system font where a
+    profile's fonts are absent (the profiles list Windows fonts like
+    'Microsoft YaHei UI' that don't exist on macOS).
+    """
+    if sys.platform == 'darwin':
+        return ['PingFang SC', 'Helvetica Neue']
+    if sys.platform == 'win32':
+        return ['Microsoft YaHei UI', 'Segoe UI']
+    return ['Noto Sans CJK SC', 'Noto Sans SC']
+
+
+def font_family_css(profile: str, custom_family: str = '') -> str:
+    """Build a QSS font-family value using only installed families.
+
+    Filtering to fonts that actually exist avoids Qt's 'missing font family'
+    warning and the alias-population cost it triggers, and the platform system
+    font is appended so there's always a real CJK fallback.
+    """
+    if custom_family:
+        wanted = [custom_family]
+    else:
+        wanted = list(FONT_PROFILES.get(profile, FONT_PROFILES['default']))
+    wanted += _system_ui_families()
+    known = set(QFontDatabase.families())
+    seen: set[str] = set()
+    families: list[str] = []
+    for fam in wanted:
+        if fam and fam not in seen and fam in known:
+            seen.add(fam)
+            families.append(fam)
+    if not families:
+        families = _system_ui_families()
+    # End with a guaranteed-present real font rather than the generic
+    # "sans-serif" keyword, which Qt's QSS parser reports as a missing family.
+    return ', '.join(f'"{fam}"' for fam in families)
 
 
 def load_app_fonts(resources_dir: Path) -> list[str]:
@@ -56,6 +97,7 @@ def build_body_font(
         families = [custom_family]
     else:
         families = list(FONT_PROFILES.get(profile, FONT_PROFILES['default']))
+    families += _system_ui_families()
     all_known = QFontDatabase.families()
     chosen = [family for family in families if family in all_known]
     font = QFont()

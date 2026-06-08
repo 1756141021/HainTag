@@ -2299,13 +2299,12 @@ class MainWindow(QWidget):
         opacity = self._state.settings.card_opacity
         brightness = self._state.settings.bg_brightness
         custom_family = self._storage.font_family_by_id(settings.custom_font_id) if settings.custom_font_id else ''
-        # Build font_family CSS string from profile
-        from .font_loader import FONT_PROFILES
-        if settings.font_profile == 'custom' and custom_family:
-            ff_list = [custom_family]
-        else:
-            ff_list = FONT_PROFILES.get(settings.font_profile, FONT_PROFILES['default'])
-        font_family_css = ', '.join(f'"{f}"' for f in ff_list) + ', sans-serif'
+        # Build font_family CSS string from profile (installed fonts only)
+        from .font_loader import font_family_css as _font_family_css
+        font_family_css = _font_family_css(
+            settings.font_profile,
+            custom_family if (settings.font_profile == 'custom' and custom_family) else '',
+        )
         set_app_ui_scale(settings.ui_scale_percent)
         app.setStyleSheet(scale_qss(generate_qss(
             theme, custom_palette=self._custom_palette, card_opacity=opacity,
