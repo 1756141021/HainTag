@@ -67,6 +67,10 @@ python -m native_app
 
 > **TAG 词典**：仓库不含 `danbooru_all_2.csv`（约 6 MB 的 Danbooru 标签词典，体积大未入库）。缺它程序仍能启动，但 TAG 自动补全、中文翻译、分类着色会全部为空。把该文件放到 `~/Library/Application Support/HainTag/danbooru_all_2.csv` 即可生效——可从 Windows release 包里解压取得，或向作者索取。之后替换这个文件就能更新词典，无需重新安装。
 
+> **图像反推 · 本地推理**：本地 ONNX 反推需要 cl_tagger 模型，仓库不含也不会自动下载。从 Hugging Face [cella110n/cl_tagger](https://huggingface.co/cella110n/cl_tagger) 下载 `cl_tagger_1_02/model_optimized.onnx` 和 `cl_tagger_1_02/tag_mapping.json`，放到 `~/Library/Application Support/HainTag/models/cl_tagger_1_02/`（或在卡片里手动选模型目录，例如 ComfyUI 的模型目录）。首次使用若 onnxruntime 不可用，软件会引导自动配置一个独立 Python 环境。
+
+> **图像反推 · LLM**：需要支持视觉的模型（如 GPT-4o、Qwen-VL 等；纯文本模型如 DeepSeek-chat 发图读不了）。目前没有内置默认提示词——请在 LLM 反推的提示词框里填入要求“只输出逗号分隔的 Danbooru 标签、不要句子、不要解释”的指令，否则模型可能返回整段描述，解析出 0 个有效标签。
+
 ---
 
 ### 0.9.1 更新重点
