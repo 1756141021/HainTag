@@ -7,11 +7,11 @@
 **「把你脑海里的画面，变成机器能读懂的语言。」**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078d4.svg)]()
+[![Platform: Windows | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg)]()
 [![Release](https://img.shields.io/github/v/release/1756141021/HainTag?color=green)](https://github.com/1756141021/HainTag/releases)
 [![Downloads](https://img.shields.io/badge/Downloads-Release-orange)](https://github.com/1756141021/HainTag/releases)
 
-AI 绘画 TAG 生成 · 管理 · 工作流——一站式 Windows 桌面工具
+AI 绘画 TAG 生成 · 管理 · 工作流——一站式 Windows / macOS 桌面工具
 
 如果觉得好用，请推荐给你的朋友们，顺手点个 ⭐ Star 就是最大的支持！
 
@@ -23,7 +23,7 @@ AI 绘画 TAG 生成 · 管理 · 工作流——一站式 Windows 桌面工具
 
 ### 这是什么
 
-HainTag 是一款 Windows 桌面应用，为 Stable Diffusion / NovelAI 等 AI 绘画工作流而设计。
+HainTag 是一款桌面应用（Windows / macOS），为 Stable Diffusion / NovelAI 等 AI 绘画工作流而设计。
 
 它通过你自己的 LLM（兼容 OpenAI 格式的任意 API）将自然语言描述转化为 Danbooru 标签体系 TAG，并提供从生成、编辑、补全到图片管理、元数据处理的完整工具链。
 
@@ -62,6 +62,10 @@ python -m native_app
 如果 `git clone` 在 `Receiving objects` / `Unpacking objects` 阶段报错，删除没下载完整的 `~/Applications/HainTag` 文件夹，重新执行上面的 `git clone`。也可以换一个父目录再 clone，例如 `~/Downloads`。
 
 程序目录只是代码位置。用户数据会写到 `~/Library/Application Support/HainTag/`。
+
+> **系统要求**：macOS 11+（Apple Silicon 或 Intel）
+
+> **TAG 词典**：仓库不含 `danbooru_all_2.csv`（约 6 MB 的 Danbooru 标签词典，体积大未入库）。缺它程序仍能启动，但 TAG 自动补全、中文翻译、分类着色会全部为空。把该文件放到 `~/Library/Application Support/HainTag/danbooru_all_2.csv` 即可生效——可从 Windows release 包里解压取得，或向作者索取。之后替换这个文件就能更新词典，无需重新安装。
 
 ---
 
