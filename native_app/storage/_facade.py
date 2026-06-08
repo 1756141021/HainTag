@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 from typing import Any
+
+from ..app_paths import app_data_dir
 
 from ..models import (
     AppSettings,
@@ -32,12 +32,7 @@ from ._state import StateStorage
 
 class AppStorage:
     def __init__(self, app_name: str = "HainTag") -> None:
-        if sys.platform == "darwin":
-            base_path = Path.home() / "Library" / "Application Support"
-        else:
-            appdata_root = os.environ.get("APPDATA")
-            base_path = Path(appdata_root) if appdata_root else Path.home() / "AppData" / "Roaming"
-        self._init_paths(base_path / app_name)
+        self._init_paths(app_data_dir(app_name))
 
     def _init_paths(self, app_dir: Path) -> None:
         self._paths = StoragePaths.from_app_dir(app_dir)

@@ -15,10 +15,11 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from pathlib import Path
 from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QThread, pyqtSignal
+
+from .app_paths import app_data_dir
 
 # ── Constants ──
 
@@ -38,13 +39,7 @@ _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 def _env_dir() -> str:
     """Return the managed Python environment directory path."""
-    if _IS_MAC:
-        base = str(Path.home() / "Library" / "Application Support")
-    else:
-        base = os.environ.get("APPDATA", "")
-        if not base:
-            base = str(Path.home() / "AppData" / "Roaming")
-    return os.path.join(base, "HainTag", "python_env")
+    return str(app_data_dir() / "python_env")
 
 
 def _python_exe_in(env_dir: str) -> str:
