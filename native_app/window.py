@@ -134,6 +134,27 @@ if sys.platform == "win32":
     HTBOTTOMRIGHT = 17
 
 
+def _locate_data_file(name: str) -> Path | None:
+    """Locate a bundled data file across frozen and source layouts.
+
+    PyInstaller puts ``datas`` under ``sys._MEIPASS`` (e.g. the macOS
+    ``.app``'s Contents/Frameworks, while the executable lives in
+    Contents/MacOS), so that must be checked in addition to the executable
+    dir and the source-tree root.
+    """
+    bases: list[Path] = []
+    meipass = getattr(sys, '_MEIPASS', '')
+    if meipass:
+        bases.append(Path(meipass))
+    bases.append(Path(sys.executable).resolve().parent)
+    bases.append(Path(__file__).resolve().parent.parent)
+    for base in bases:
+        candidate = base / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
 class WindowSurface(QWidget):
     pass
 
@@ -534,12 +555,9 @@ class MainWindow(QWidget):
 
         # Tag dictionary lazy-loads CSV on first lookup — startup stays cheap.
         self._tag_dictionary = TagDictionary()
-        csv_name = 'danbooru_all_2.csv'
-        for base in [Path(sys.executable).parent, Path(__file__).resolve().parent.parent]:
-            csv_path = base / csv_name
-            if csv_path.exists():
-                self._tag_dictionary.queue_csv(csv_path)
-                break
+        csv_path = _locate_data_file('danbooru_all_2.csv')
+        if csv_path is not None:
+            self._tag_dictionary.queue_csv(csv_path)
         # Dispatch the dictionary to every host that opted into the TagCompletionHost
         # protocol (set_tag_dictionary). New panels just implement set_tag_dictionary
         # and add themselves to this list — no per-widget install_completer call here.
@@ -3434,20 +3452,13 @@ class MainWindow(QWidget):
 
     def _show_changelog(self) -> None:
         """Show changelog in a styled popup at the version label."""
-        import sys
-        # Find CHANGELOG.md — check project root first, then bundled resources
-        candidates = [
-            Path(__file__).resolve().parent.parent / "CHANGELOG.md",
-            Path(getattr(sys, '_MEIPASS', '')) / "CHANGELOG.md" if hasattr(sys, '_MEIPASS') else None,
-        ]
         content = ""
-        for p in candidates:
-            if p and p.exists():
-                try:
-                    content = p.read_text(encoding="utf-8")
-                except OSError:
-                    pass
-                break
+        changelog_path = _locate_data_file("CHANGELOG.md")
+        if changelog_path is not None:
+            try:
+                content = changelog_path.read_text(encoding="utf-8")
+            except OSError:
+                pass
         if not content:
             content = self._translator.t("changelog_empty")
 
