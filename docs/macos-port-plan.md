@@ -818,3 +818,29 @@ def _open_report_directory(path: Path) -> None:
 > 暂不提供 UI 导入按钮（约定式：替换上述文件）。若日后需要更友好的体验，可在设置页
 > 加一个"导入 TAG 词典"按钮，选文件后拷贝到该路径并重载 —— 参照"手动选择 Python
 > 路径"的现成模式。
+
+### 构建分发版 `.app`
+
+用 `build-macos.sh`（需先激活 venv）：
+
+```bash
+source .venv/bin/activate
+./build-macos.sh                      # 自动找词典 CSV 并打包
+# 或显式指定词典：
+HAINTAG_DICT_CSV=/path/to/danbooru_all_2.csv ./build-macos.sh
+```
+
+脚本会：把词典 CSV（按 `$HAINTAG_DICT_CSV` → repo 根 → `~/Library/Application
+Support/HainTag/` 顺序查找）临时拷到 repo 根 → `pyinstaller HainTag-mac.spec`
+→ 清理临时拷贝 → 产出 `dist/HainTag.app`。词典随包分发，首次运行 seed 到用户
+App Support（见上一节）。
+
+**分发给用户**：`.app` 是 ad-hoc 签名但**未公证**（无付费 Apple Developer ID）。
+用户下载后需清除 Gatekeeper 隔离标记才能打开：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/HainTag.app"
+```
+
+或首次打开被拦后到 系统设置 → 隐私与安全性 → 点"仍要打开"。这是免签名开源 mac
+app 的常规做法；正式签名 / 公证需要 $99/年的开发者账号，暂不做。
