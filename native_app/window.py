@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sys
 import time
 import traceback
@@ -40,6 +41,7 @@ from PyQt6.QtWidgets import (
 from functools import partial
 
 from .api_client import ChatWorker
+from .app_paths import app_data_dir
 from .error_reporting import report_error, safe_context_from_settings
 from .file_filters import config_filter, image_filter, json_filter, ttf_filter
 from .font_loader import build_body_font
@@ -153,6 +155,28 @@ def _locate_data_file(name: str) -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def _resolve_tag_dictionary_csv() -> Path | None:
+    """Return the Danbooru CSV path to load, seeding the user copy first run.
+
+    The dictionary lives in the user app-data dir so it can be updated
+    independently of the app (and because a copy inside a signed .app is
+    read-only). On first run we seed that copy from the bundled/source CSV
+    if one is present; thereafter the user copy is authoritative and can be
+    replaced to update the dictionary without rebuilding.
+    """
+    name = 'danbooru_all_2.csv'
+    user_csv = app_data_dir() / name
+    if not user_csv.exists():
+        bundled = _locate_data_file(name)
+        if bundled is not None:
+            try:
+                user_csv.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(bundled, user_csv)
+            except OSError:
+                return bundled  # can't seed — read the bundled copy in place
+    return user_csv if user_csv.exists() else None
 
 
 class WindowSurface(QWidget):
@@ -554,8 +578,10 @@ class MainWindow(QWidget):
         set_last_image_dir(self._state.settings.image_manager_folder)
 
         # Tag dictionary lazy-loads CSV on first lookup — startup stays cheap.
+        # Seeded into the app-data dir on first run so users can update the
+        # Danbooru dump without rebuilding (see _resolve_tag_dictionary_csv).
         self._tag_dictionary = TagDictionary()
-        csv_path = _locate_data_file('danbooru_all_2.csv')
+        csv_path = _resolve_tag_dictionary_csv()
         if csv_path is not None:
             self._tag_dictionary.queue_csv(csv_path)
         # Dispatch the dictionary to every host that opted into the TagCompletionHost

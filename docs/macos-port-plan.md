@@ -791,3 +791,30 @@ def _open_report_directory(path: Path) -> None:
 1. **`updater.py`：macOS 走 .dmg 还是 .zip？** .dmg 更地道但要 `hdiutil`；.zip 最简单（直接 cp .app）
 2. **`window.py`：路线 A（frameless 全自定义，~80 行 mouse event resize）/ 路线 C（推荐：NSFullSizeContentView + 透明标题栏，保留交通灯，~30 行 PyObjC + 增加 pyobjc 依赖）/ 路线 B（macOS 上完全用原生标题栏）？** 影响视觉一致性与 macOS 用户预期
 3. **`python_env.py`：找不到系统 python3 时降级方案？** 提示用户 brew install？还是 fallback 下载 python-build-standalone（额外 ~30 MB）？
+
+---
+
+## 附录：TAG 词典（`danbooru_all_2.csv`）的分发与更新
+
+约 5.9 MB / ~15 万行的 Danbooru 标签词典，驱动 TAG 自动补全、悬停中文翻译、
+分类着色、LLM / 本地反推的 tag 校验。它被 gitignore，不进仓库。
+
+**分发策略：附带进包 + 首次运行释放到用户目录**
+
+1. **打包时附带**：`HainTag-mac.spec` 条件包含该 CSV —— release 构建前把
+   `danbooru_all_2.csv` 放到仓库根目录（与 spec 同级），它就会被打进
+   `.app`（落在 `Contents/Frameworks/`，即 `sys._MEIPASS`）。若构建时缺文件，
+   spec 打印 warning 并跳过（不阻断构建）。
+2. **首次运行释放**：`window._resolve_tag_dictionary_csv()` 在首次启动时，若用户
+   目录没有该文件，就从包内拷贝一份到
+   `~/Library/Application Support/HainTag/danbooru_all_2.csv`。
+3. **此后以用户副本为准**：之后始终读用户目录那份。`.app` 内部是只读（且签名后
+   不可改），所以词典的"可更新副本"必须放在用户可写目录。
+
+**用户如何更新词典**：直接替换
+`~/Library/Application Support/HainTag/danbooru_all_2.csv`，重启即可生效，
+无需重新打包或更新整个 app。
+
+> 暂不提供 UI 导入按钮（约定式：替换上述文件）。若日后需要更友好的体验，可在设置页
+> 加一个"导入 TAG 词典"按钮，选文件后拷贝到该路径并重载 —— 参照"手动选择 Python
+> 路径"的现成模式。
