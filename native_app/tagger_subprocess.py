@@ -13,6 +13,21 @@ import os
 for _var in ('PYTHONHOME', 'PYTHONPATH', '_MEIPASS'):
     os.environ.pop(_var, None)
 
+
+def _writable_log_dir():
+    """A user-writable dir for the debug log.
+
+    This script's own directory is read-only inside a packaged app
+    (Contents/Frameworks/native_app/), so the debug file must go elsewhere.
+    """
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Logs/HainTag")
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "HainTag", "logs")
+    return os.path.expanduser("~/.cache/HainTag")
+
+
 import numpy as np
 from PIL import Image
 
@@ -70,9 +85,12 @@ def main():
             "PYTHONPATH": os.environ.get("PYTHONPATH", "NOT_SET"),
             "PATH": os.environ.get("PATH", "")[:500],
         }
-        # Also write to a debug file for easier reading
-        _debug_path = os.path.join(os.path.dirname(__file__), "ort_debug.txt")
+        # Also write to a debug file for easier reading (in a writable dir —
+        # this script's own dir is read-only inside a packaged .app).
         try:
+            _log_dir = _writable_log_dir()
+            os.makedirs(_log_dir, exist_ok=True)
+            _debug_path = os.path.join(_log_dir, "ort_debug.txt")
             with open(_debug_path, "w", encoding="utf-8") as _f:
                 for k, v in debug.items():
                     _f.write(f"{k}: {v}\n")
