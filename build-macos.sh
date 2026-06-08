@@ -68,8 +68,21 @@ echo "[build-macos] running: ${PYI[*]} HainTag-mac.spec"
 "${PYI[@]}" HainTag-mac.spec --noconfirm
 
 APP="$ROOT/dist/HainTag.app"
+
+# ── Wrap the .app in a drag-to-install .dmg ──
+DMG="$ROOT/dist/HainTag.dmg"
+STAGING="$(mktemp -d)"
+cp -R "$APP" "$STAGING/"
+ln -s /Applications "$STAGING/Applications"   # drag-to-Applications target
+rm -f "$DMG"
+echo "[build-macos] creating dmg…"
+hdiutil create -volname "HainTag" -srcfolder "$STAGING" \
+  -ov -format UDZO "$DMG" >/dev/null
+rm -rf "$STAGING"
+
 echo ""
 echo "[build-macos] done → $APP"
+echo "[build-macos]        $DMG"
 echo "[build-macos] distribution note: the .app is ad-hoc signed but NOT"
 echo "             notarized (no paid Apple Developer ID). After downloading it,"
 echo "             recipients must clear the Gatekeeper quarantine flag:"

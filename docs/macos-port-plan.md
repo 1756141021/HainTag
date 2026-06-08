@@ -832,8 +832,9 @@ HAINTAG_DICT_CSV=/path/to/danbooru_all_2.csv ./build-macos.sh
 
 脚本会：把词典 CSV（按 `$HAINTAG_DICT_CSV` → repo 根 → `~/Library/Application
 Support/HainTag/` 顺序查找）临时拷到 repo 根 → `pyinstaller HainTag-mac.spec`
-→ 清理临时拷贝 → 产出 `dist/HainTag.app`。词典随包分发，首次运行 seed 到用户
-App Support（见上一节）。
+→ 清理临时拷贝 → 把 `.app` 包成拖拽安装的 `dist/HainTag.dmg`（含 `Applications`
+软链），同时保留 `dist/HainTag.app`。词典随包分发，首次运行 seed 到用户 App
+Support（见上一节）。
 
 **分发给用户**：`.app` 是 ad-hoc 签名但**未公证**（无付费 Apple Developer ID）。
 用户下载后需清除 Gatekeeper 隔离标记才能打开：
