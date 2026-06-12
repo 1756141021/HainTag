@@ -31,10 +31,11 @@ python -m native_app
 
 ```bash
 ruff check native_app        # 配置在 pyproject.toml
+pytest -q                    # 需先 pip install pytest
 python -c "import native_app.window"
 ```
 
-CI 会在 PR 上跑同样两步。
+CI 会在 PR 上跑同样三步。测试只覆盖纯逻辑层（不创建 QApplication），改动逻辑层时请补对应用例，约定见 `tests/DEV_NOTES.md`。
 
 ## 约定
 
