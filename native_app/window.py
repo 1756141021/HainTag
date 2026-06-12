@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sys
 import time
 import traceback
@@ -40,6 +41,7 @@ from PyQt6.QtWidgets import (
 from functools import partial
 
 from .api_client import ChatWorker
+from .app_paths import app_data_dir
 from .error_reporting import report_error, safe_context_from_settings
 from .file_filters import config_filter, image_filter, json_filter, ttf_filter
 from .font_loader import build_body_font
@@ -132,6 +134,49 @@ if sys.platform == "win32":
     HTBOTTOM = 15
     HTBOTTOMLEFT = 16
     HTBOTTOMRIGHT = 17
+
+
+def _locate_data_file(name: str) -> Path | None:
+    """Locate a bundled data file across frozen and source layouts.
+
+    PyInstaller puts ``datas`` under ``sys._MEIPASS`` (e.g. the macOS
+    ``.app``'s Contents/Frameworks, while the executable lives in
+    Contents/MacOS), so that must be checked in addition to the executable
+    dir and the source-tree root.
+    """
+    bases: list[Path] = []
+    meipass = getattr(sys, '_MEIPASS', '')
+    if meipass:
+        bases.append(Path(meipass))
+    bases.append(Path(sys.executable).resolve().parent)
+    bases.append(Path(__file__).resolve().parent.parent)
+    for base in bases:
+        candidate = base / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _resolve_tag_dictionary_csv() -> Path | None:
+    """Return the Danbooru CSV path to load, seeding the user copy first run.
+
+    The dictionary lives in the user app-data dir so it can be updated
+    independently of the app (and because a copy inside a signed .app is
+    read-only). On first run we seed that copy from the bundled/source CSV
+    if one is present; thereafter the user copy is authoritative and can be
+    replaced to update the dictionary without rebuilding.
+    """
+    name = 'danbooru_all_2.csv'
+    user_csv = app_data_dir() / name
+    if not user_csv.exists():
+        bundled = _locate_data_file(name)
+        if bundled is not None:
+            try:
+                user_csv.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(bundled, user_csv)
+            except OSError:
+                return bundled  # can't seed — read the bundled copy in place
+    return user_csv if user_csv.exists() else None
 
 
 class WindowSurface(QWidget):
@@ -533,13 +578,12 @@ class MainWindow(QWidget):
         set_last_image_dir(self._state.settings.image_manager_folder)
 
         # Tag dictionary lazy-loads CSV on first lookup — startup stays cheap.
+        # Seeded into the app-data dir on first run so users can update the
+        # Danbooru dump without rebuilding (see _resolve_tag_dictionary_csv).
         self._tag_dictionary = TagDictionary()
-        csv_name = 'danbooru_all_2.csv'
-        for base in [Path(sys.executable).parent, Path(__file__).resolve().parent.parent]:
-            csv_path = base / csv_name
-            if csv_path.exists():
-                self._tag_dictionary.queue_csv(csv_path)
-                break
+        csv_path = _resolve_tag_dictionary_csv()
+        if csv_path is not None:
+            self._tag_dictionary.queue_csv(csv_path)
         # Dispatch the dictionary to every host that opted into the TagCompletionHost
         # protocol (set_tag_dictionary). New panels just implement set_tag_dictionary
         # and add themselves to this list — no per-widget install_completer call here.
@@ -2255,13 +2299,12 @@ class MainWindow(QWidget):
         opacity = self._state.settings.card_opacity
         brightness = self._state.settings.bg_brightness
         custom_family = self._storage.font_family_by_id(settings.custom_font_id) if settings.custom_font_id else ''
-        # Build font_family CSS string from profile
-        from .font_loader import FONT_PROFILES
-        if settings.font_profile == 'custom' and custom_family:
-            ff_list = [custom_family]
-        else:
-            ff_list = FONT_PROFILES.get(settings.font_profile, FONT_PROFILES['default'])
-        font_family_css = ', '.join(f'"{f}"' for f in ff_list) + ', sans-serif'
+        # Build font_family CSS string from profile (installed fonts only)
+        from .font_loader import font_family_css as _font_family_css
+        font_family_css = _font_family_css(
+            settings.font_profile,
+            custom_family if (settings.font_profile == 'custom' and custom_family) else '',
+        )
         set_app_ui_scale(settings.ui_scale_percent)
         app.setStyleSheet(scale_qss(generate_qss(
             theme, custom_palette=self._custom_palette, card_opacity=opacity,
@@ -3434,20 +3477,13 @@ class MainWindow(QWidget):
 
     def _show_changelog(self) -> None:
         """Show changelog in a styled popup at the version label."""
-        import sys
-        # Find CHANGELOG.md — check project root first, then bundled resources
-        candidates = [
-            Path(__file__).resolve().parent.parent / "CHANGELOG.md",
-            Path(getattr(sys, '_MEIPASS', '')) / "CHANGELOG.md" if hasattr(sys, '_MEIPASS') else None,
-        ]
         content = ""
-        for p in candidates:
-            if p and p.exists():
-                try:
-                    content = p.read_text(encoding="utf-8")
-                except OSError:
-                    pass
-                break
+        changelog_path = _locate_data_file("CHANGELOG.md")
+        if changelog_path is not None:
+            try:
+                content = changelog_path.read_text(encoding="utf-8")
+            except OSError:
+                pass
         if not content:
             content = self._translator.t("changelog_empty")
 

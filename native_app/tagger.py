@@ -319,7 +319,10 @@ class TaggerEngine:
 
         python = self._external_python
         if not python:
-            raise RuntimeError("需要指定外部 Python 路径（如 ComfyUI 的 Python）")
+            raise RuntimeError(
+                "需要指定外部 Python 路径"
+                "（Windows：ComfyUI 的 python.exe；macOS：Homebrew 的 python3 或自动配置的 venv）"
+            )
         if not os.path.isfile(python):
             raise RuntimeError(f"Python 路径无效: {python}")
 
