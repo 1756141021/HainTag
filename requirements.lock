@@ -21,8 +21,6 @@ colorama==0.4.6
     #   tqdm
 filelock==3.29.3
     # via huggingface-hub
-flatbuffers==25.12.19
-    # via onnxruntime
 fsspec==2026.4.0
     # via huggingface-hub
 h11==0.16.0
@@ -47,19 +45,11 @@ markdown-it-py==4.2.0
 mdurl==0.1.2
     # via markdown-it-py
 numpy==2.4.6
-    # via
-    #   haintag (pyproject.toml)
-    #   onnxruntime
-onnxruntime==1.26.0
     # via haintag (pyproject.toml)
 packaging==26.2
-    # via
-    #   huggingface-hub
-    #   onnxruntime
+    # via huggingface-hub
 pillow==12.2.0
     # via haintag (pyproject.toml)
-protobuf==7.35.1
-    # via onnxruntime
 pygments==2.20.0
     # via rich
 pyqt6==6.11.0

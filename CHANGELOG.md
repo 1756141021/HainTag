@@ -31,7 +31,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **本地反推快速切图时旧结果覆盖新结果** — 推理 worker 被替换后旧线程的 finished/error 信号仍会落地；现在只接受当前 worker 的信号
 - **英文界面本地反推设置页中文混杂** — interrogator 的 21 个 `_lt()` 键未录入语言文件，英文用户看到硬编码中文回退；补全 zh-CN/en 两侧键值
 - **截断 PNG 产出残缺 chunk** — 元数据读写器读 chunk 时校验实际读取长度，截断文件丢弃残缺尾 chunk，销毁/编辑不再把残缺数据写回输出
-- **依赖清单补全** — `requirements.txt` 此前缺 Pillow/numpy/onnxruntime/huggingface_hub（本地打包靠环境里恰好装了才正常），干净环境打出的包会静默丢失缩略图、背景模糊、调色板、隐写解析与本地反推主进程推理；补全后发版自检强制校验这些库在包内
+- **依赖清单补全** — `requirements.txt` 此前缺 Pillow/numpy/huggingface_hub（本地打包靠环境里恰好装了才正常），干净环境打出的包会静默丢失缩略图、背景模糊、调色板、隐写解析与模型下载；补全后发版自检强制校验这些库在包内（onnxruntime 按既有设计继续排除，推理走托管子进程）
 
 ### Changed
 - **默认字体改为思源黑体** — 新装默认 `font_profile` 从霞鹜文楷（手写感）改为思源黑体（正式）；已保存过字体选择的用户不受影响，可随时从外观菜单切换
