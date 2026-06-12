@@ -12,22 +12,22 @@
 
 | # | 事项 | 量 | 说明 |
 |---|------|----|------|
-| 1 | API 配置引导 | S | 缺 API 报错自动打开的设置面板里加帮助文本：支持哪些 OpenAI 兼容服务、去哪申请、README 对应章节链接。引导第 2 步从"在这里配置 API"升级为"怎么获得 API" |
-| 2 | 本地反推降门槛 | S-M | 模型步骤加 HuggingFace 直达链接按钮；"自动配置 Python 环境"补充体积/耗时预期；术语口语化（非程序员不懂 onnxruntime） |
-| 3 | 首启空白感 | S | 提示词卡片首启默认可见（models.py WidgetState 默认值），或输入框空状态加提示"输入画面描述，Enter 生成" |
-| 4 | 气泡提示时机 | S | 现在延迟 2-6s 出现容易错过，改为关键控件首次 hover/focus 触发 |
+| ~~1~~ | ~~API 配置引导~~ | S | ✅ 2026-06-12 设置面板 API 标签悬停说明 + 「查看配置说明」README 链接；缺 API 报错与教程第 2 步文案同步 |
+| 2 | 本地反推降门槛 | S-M | 部分完成（体积/耗时预期已补）。剩：HuggingFace 直达链接按钮、术语口语化（非程序员不懂 onnxruntime） |
+| 3 | 首启空白感 | S | 部分完成（输入框空状态提示已改）。剩：提示词卡片首启默认可见（models.py WidgetState 默认值）可选项待定 |
+| ~~4~~ | ~~气泡提示时机~~ | S | ✅ 2026-06-12 hint_send/hint_scrub 改里程碑触发（首次输入 / 首次生成完成） |
 
 ## P1 — 工程基建
 
-资深视角"贡献者就绪 4/10"的解药。
+资深视角"贡献者就绪 4/10"的解药。批次顺序（已定）：①工程三件套 → ②pytest 测试集 → ③Release 自动发版 → ④安全双修（P2 #10+#11）。
 
 | # | 事项 | 量 | 说明 |
 |---|------|----|------|
 | 5 | pytest 核心逻辑测试 | M | logic.py（depth/消息组装）、llm_tagger_logic.py（1girl 归一化做回归）、metadata/parsers、storage 往返。先纯逻辑层，目标 40-50% |
-| 6 | GitHub Actions CI | S | ruff + import 冒烟，PR/push 触发 |
+| ~~6~~ | ~~GitHub Actions CI~~ | S | ✅ 2026-06-12 `.github/workflows/ci.yml`：ruff + import 冒烟，push/PR 触发 |
 | 7 | Release workflow | M | tag 推送 → win+mac 双平台打包 → 自动建 release。PR #4 作者（Miint-Sunny）也提过，mac 侧可邀其协作 |
-| 8 | CONTRIBUTING + 模板 | S | 开发环境、架构入口指向 DEV_NOTES、CHANGELOG 约定、issue/PR 模板 |
-| 9 | pyproject.toml + 依赖锁定 | S | 现在 requirements.txt 只有直接依赖无锁定 |
+| ~~8~~ | ~~CONTRIBUTING + 模板~~ | S | ✅ 2026-06-12 `CONTRIBUTING.md` + issue/PR 模板 |
+| ~~9~~ | ~~pyproject.toml + 依赖锁定~~ | S | ✅ 2026-06-12 `pyproject.toml`（含 ruff 配置）+ `requirements.lock`（uv pip compile 生成） |
 
 ## P2 — 安全 / 信任
 

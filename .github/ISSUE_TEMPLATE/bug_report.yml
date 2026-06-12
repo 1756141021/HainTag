@@ -1,0 +1,40 @@
+name: Bug 报告
+description: 功能异常、报错、崩溃
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: HainTag 版本
+      description: 设置面板左下角或标题栏版本号
+      placeholder: v0.10.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 系统
+      placeholder: Windows 11 / macOS 14
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 出现 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 vs 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 报错信息 / 错误报告
+      description: 若弹过错误报告，文件在 %APPDATA%\HainTag\reports\（macOS 为 ~/Library/Application Support/HainTag/reports/）

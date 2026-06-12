@@ -6,8 +6,9 @@ widget, a description panel, and Next/Skip buttons.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
-from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -22,6 +23,7 @@ class OnboardingStep:
     title: str
     description: str
     position: str = "below"  # below / above / left / right
+    on_enter: Callable[[], None] | None = None  # opens the related panel/card
 
 
 class OnboardingOverlay(QWidget):
@@ -104,6 +106,13 @@ class OnboardingOverlay(QWidget):
         step = self._steps[self._current]
         p = current_palette()
 
+        if step.on_enter is not None:
+            step.on_enter()
+            self.raise_()
+            # Panels animate open (~250ms); track the target once settled.
+            current = self._current
+            QTimer.singleShot(280, lambda: self._settle_step(current))
+
         self._title_label.setText(step.title)
         self._title_label.setStyleSheet(
             f"color: {p['text']}; font-size: {_fs('fs_13')}; font-weight: bold; "
@@ -178,6 +187,13 @@ class OnboardingOverlay(QWidget):
             py = max(8, min(py, self.height() - self._panel.height() - 8))
 
         self._panel.move(px, py)
+
+    def _settle_step(self, step_index: int) -> None:
+        if not self.isVisible() or self._current != step_index:
+            return
+        self.raise_()
+        self._position_panel(self._steps[self._current])
+        self.update()
 
     def _next_step(self) -> None:
         self._current += 1

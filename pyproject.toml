@@ -1,0 +1,26 @@
+[project]
+name = "haintag"
+version = "0.10.0"
+description = "AI 绘画 TAG 生成 · 管理 · 工作流桌面工具"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-only" }
+dependencies = [
+    "PyQt6>=6.7",
+    "httpx>=0.28",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+build = [
+    "PyInstaller>=6.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "E9", "B904"]
+
+[tool.ruff.lint.per-file-ignores]
+"native_app/__init__.py" = ["F401"]

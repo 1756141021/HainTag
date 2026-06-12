@@ -3493,27 +3493,62 @@ class MainWindow(QWidget):
         panel.show_at(QCursor.pos())
 
     def _start_tutorial(self) -> None:
-        """Full on-demand tutorial — opened from the shortcuts panel, never auto-played."""
+        """Full on-demand tutorial — opened from the shortcuts panel, never auto-played.
+
+        Steps open their related panel/card via on_enter so the highlight
+        always points at something actually on screen.
+        """
         from .widgets.onboarding import OnboardingOverlay, OnboardingStep
         t = self._translator.t
         shortcut = self._send_shortcut_text()
         self.main_card.show()
         self.prompt_card.show()
+
+        def open_settings() -> None:
+            self._set_settings_open(True)
+
+        def close_settings() -> None:
+            self._set_settings_open(False)
+
+        def show_prompts() -> None:
+            self.prompt_card.show()
+            self.prompt_card.raise_()
+
+        def open_library() -> None:
+            if self._right_sidebar_mode != 'library':
+                self._toggle_library()
+
+        def close_library() -> None:
+            if self._right_sidebar_mode == 'library':
+                self._toggle_library()
+
+        def show_main() -> None:
+            close_library()
+            self.main_card.show()
+            self.main_card.raise_()
+
         overlay = OnboardingOverlay(self.surface, self._translator)
         overlay.set_steps([
             OnboardingStep(None, t("tut_welcome_title"), t("tut_welcome_desc")),
-            OnboardingStep(self.btn_settings, t("tut_api_title"), t("tut_api_desc"), "below"),
-            OnboardingStep(self.input_widget, t("tut_input_title"), t("tut_input_desc"), "right"),
+            OnboardingStep(self.btn_settings, t("tut_api_title"), t("tut_api_desc"), "below",
+                           on_enter=open_settings),
+            OnboardingStep(self.input_widget, t("tut_input_title"), t("tut_input_desc"), "right",
+                           on_enter=close_settings),
             OnboardingStep(self.input_widget.send_button, t("tut_send_title"),
                            t("tut_send_desc").format(shortcut=shortcut), "above"),
             OnboardingStep(self.main_card, t("tut_result_title"), t("tut_result_desc"), "right"),
             OnboardingStep(self.output_widget.full_editor, t("tut_weight_title"), t("tut_weight_desc"), "right"),
-            OnboardingStep(self.prompt_card, t("tut_prompts_title"), t("tut_prompts_desc"), "right"),
-            OnboardingStep(self._lib_tab_btn, t("tut_library_title"), t("tut_library_desc"), "left"),
-            OnboardingStep(self.dock_panel, t("tut_dock_title"), t("tut_dock_desc"), "right"),
-            OnboardingStep(self.main_card, t("tut_history_title"), t("tut_history_desc"), "right"),
+            OnboardingStep(self.prompt_card, t("tut_prompts_title"), t("tut_prompts_desc"), "right",
+                           on_enter=show_prompts),
+            OnboardingStep(self._lib_tab_btn, t("tut_library_title"), t("tut_library_desc"), "left",
+                           on_enter=open_library),
+            OnboardingStep(self.dock_panel, t("tut_dock_title"), t("tut_dock_desc"), "right",
+                           on_enter=close_library),
+            OnboardingStep(self.main_card, t("tut_history_title"), t("tut_history_desc"), "right",
+                           on_enter=show_main),
             OnboardingStep(None, t("tut_finish_title"), t("tut_finish_desc")),
         ])
+        overlay.finished.connect(close_library)
         overlay.start()
 
     def _show_prompt_preview(self) -> None:

@@ -10,7 +10,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.10.0] - 2026-06-12
 
 ### Added
-- **按需新手教程** — 快捷键面板（?）新增「新手教程」入口，11 步遮罩引导覆盖完整基础流程（配 API → 输入描述 → 生成 → 权重编辑 → 提示词/库/工具/历史），只在用户主动打开时播放，开局不打扰；播放时自动拉出工作台与提示词卡片
+- **按需新手教程** — 快捷键面板（?）新增「新手教程」入口，11 步遮罩引导覆盖完整基础流程（配 API → 输入描述 → 生成 → 权重编辑 → 提示词/库/工具/历史），只在用户主动打开时播放，开局不打扰；教程跟手：播到对应步骤自动展开设置面板、提示词卡片与画师库，离开该步骤自动收起，气泡等面板动画结束后重新贴附目标控件
+- **工程脚手架** — `pyproject.toml`（项目元数据 + ruff 配置 + `requirements.lock` 依赖锁定）、GitHub Actions CI（push/PR 跑 ruff + import 冒烟）、`CONTRIBUTING.md` 与 issue/PR 模板
 - **API 配置引导** — 设置面板 API 地址/Key 标签加悬停说明（任意 OpenAI 兼容服务均可），模型行下新增「查看配置说明」链接直达 README；缺 API 报错与首启引导文案同步说明兼容范围
 - **上下文化提示气泡** — 发送快捷键提示改为首次输入时出现、权重拖拽提示改为首次生成完成时出现（此前为启动后定时弹出，时机错位）；本地反推环境配置补充下载体积与耗时预期
 - **macOS 支持**（PR #4，@Miint-Sunny）— 启动 / `.app`+`.dmg` 打包（`HainTag-mac.spec` + `build-macos.sh`）/ 本地 ONNX 与 LLM 反推 / 更新器选取 .dmg 资产；新增 `app_paths.py` 统一各平台用户数据目录
@@ -30,6 +31,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **截断 PNG 产出残缺 chunk** — 元数据读写器读 chunk 时校验实际读取长度，截断文件丢弃残缺尾 chunk，销毁/编辑不再把残缺数据写回输出
 
 ### Changed
+- **默认字体改为思源黑体** — 新装默认 `font_profile` 从霞鹜文楷（手写感）改为思源黑体（正式）；已保存过字体选择的用户不受影响，可随时从外观菜单切换
 - **代码清理** — 移除 50+ 处未使用 import、未用变量与死参数，异常链补全 `raise ... from`
 
 ## [0.9.11] - 2026-05-13

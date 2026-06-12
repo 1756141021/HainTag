@@ -412,7 +412,7 @@ class AppSettings:
     language: str = "zh-CN"
     ui_scale_percent: int = 100
     body_font_point_size: int = 11
-    font_profile: str = "wenkai"
+    font_profile: str = "default"
     custom_font_id: str = ""
     theme: str = "dark"
     card_opacity: int = 82
@@ -500,7 +500,7 @@ class AppSettings:
             language=str(data.get("language", "zh-CN") or "zh-CN"),
             ui_scale_percent=clamp_int(data.get("ui_scale_percent", 100), 100, 50, 300),
             body_font_point_size=clamp_int(data.get("body_font_point_size", 11), 11, 8, 24),
-            font_profile=str(data.get("font_profile", "wenkai") or "wenkai"),
+            font_profile=str(data.get("font_profile", "default") or "default"),
             custom_font_id=str(data.get("custom_font_id", "") or ""),
             theme=str(data.get("theme", "dark") or "dark"),
             card_opacity=clamp_int(data.get("card_opacity", 82), 82, 30, 100),

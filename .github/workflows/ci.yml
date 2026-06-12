@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint-and-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt ruff
+
+      - name: Ruff
+        run: ruff check native_app
+
+      - name: Import smoke
+        run: python -c "import native_app.main, native_app.window, native_app.tagger, native_app.theme, native_app.api_client, native_app.app_paths, native_app.python_env, native_app.font_loader, native_app.updater, native_app.llm_tagger_logic, native_app.logic, native_app.models, native_app.tag_dictionary, native_app.metadata.reader, native_app.metadata.writer, native_app.metadata.thumb_cache, native_app.metadata.parsers.novelai, native_app.widgets.tag_completer, native_app.widgets.image_manager, native_app.widgets.interrogator, native_app.widgets.settings_panel, native_app.widgets.shortcuts_panel, native_app.widgets.onboarding, native_app.widgets.hint_manager; print('import smoke OK')"
