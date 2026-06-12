@@ -1,4 +1,8 @@
 PyQt6>=6.7
 httpx>=0.28
 requests>=2.31
+Pillow>=11
+numpy>=2.2
+onnxruntime>=1.22
+huggingface-hub>=1.0
 PyInstaller>=6.0

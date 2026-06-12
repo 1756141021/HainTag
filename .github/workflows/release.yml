@@ -51,6 +51,10 @@ jobs:
           # PyInstaller 6 onedir puts datas in _internal/ (= sys._MEIPASS at runtime)
           $csv = (Test-Path dist/HainTag/danbooru_all_2.csv) -or (Test-Path dist/HainTag/_internal/danbooru_all_2.csv)
           if (-not $csv) { Write-Error "danbooru_all_2.csv missing from bundle"; exit 1 }
+          # v0.9.9 shipped these; missing one silently degrades thumbnails / local tagging
+          foreach ($m in @('PIL', 'numpy', 'onnxruntime')) {
+            if (-not (Test-Path "dist/HainTag/_internal/$m")) { Write-Error "$m missing from bundle"; exit 1 }
+          }
 
       - name: Package zip
         shell: pwsh
