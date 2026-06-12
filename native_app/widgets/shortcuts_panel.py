@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..models import SEND_MODE_CTRL_ENTER, SEND_MODE_ENTER
+from ..models import SEND_MODE_ENTER
 from ..theme import _fs, current_palette
 from ..ui_tokens import _dp
 

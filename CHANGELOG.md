@@ -7,6 +7,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-12
+
+### Added
+- **macOS 支持**（PR #4，@Miint-Sunny）— 启动 / `.app`+`.dmg` 打包（`HainTag-mac.spec` + `build-macos.sh`）/ 本地 ONNX 与 LLM 反推 / 更新器选取 .dmg 资产；新增 `app_paths.py` 统一各平台用户数据目录
+
+### Fixed
+- **自动更新静默失败** — 更新批处理运行在无控制台 cmd 中，`tasklist | find` 管道死锁、`timeout`/`pause` 立即失败，导致更新永不执行且无任何痕迹。改为轮询 exe 写锁判断旧进程退出，系统工具走 System32 绝对路径（防 Git Bash 的 GNU find 抢占 PATH），失败时写 `%TEMP%\haintag_update.log`、保留下载内容并尝试拉起旧版
+- **更新源目录探测加固** — 不再假设 zip 顶层文件夹名为 `HainTag`，改为定位含 `HainTag.exe` 的目录，防止 robocopy /MIR 镜像错层级清空安装目录
+- **手动检查更新无反馈** — 启动自动检查仍在进行时点击"检查更新"，现在会正常弹出结果对话框
+- **LLM 反推空提示词解析出 0 标签** — 无预设且提示词为空时回退内置默认提示词（i18n 已有 `interrogator_llm_default_prompt`，此前未接线），输入框占位符同步显示默认提示词
+- **LLM 反推 `1girl`/`2girls` 永远校验失败** — 列表编号剥离正则会吃掉 tag 开头的数字，改为仅剥离真实编号（`1.`/`2)`）与项目符号
+- **词典 seed 时效** — danbooru CSV 改为「用户副本缺失或打包副本更新（mtime）时」重新 seed，恢复 Windows 随版本更新词典的语义，保留 macOS 手动替换语义
+- **PIL 图片句柄泄漏 ×7** — tagger / 调色板提取 / 缩略图缓存 / NovelAI 隐写解析 / EXIF 读取 / 隐写清除的 `Image.open` 改为上下文管理器，被查看过的图片不再因句柄占用而无法删除/改名
+- **缩略图加载失败后永久挂起** — 加载线程吞异常导致失败项永远停留在 pending、回调堆积；新增 `thumbnail_failed` 信号清理状态，失败项可重试
+- **非 Windows"打开文件位置"崩溃** — 图片管理器右键菜单的 explorer 调用加平台门，其他平台用系统文件管理器打开所在目录
+
+### Changed
+- **代码清理** — 移除 50+ 处未使用 import、未用变量与死参数，异常链补全 `raise ... from`
+
 ## [0.9.11] - 2026-05-13
 
 ### Fixed

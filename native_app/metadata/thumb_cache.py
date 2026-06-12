@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 from collections import OrderedDict
 from queue import Queue, Empty
 from threading import Lock
@@ -13,6 +12,7 @@ class ThumbLoaderThread(QThread):
     """Background thread that loads thumbnails using PIL for fast downsampling."""
 
     thumbnail_ready = pyqtSignal(str, int, QPixmap)  # path, requested_size, pixmap
+    thumbnail_failed = pyqtSignal(str, int)  # path, requested_size
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -45,40 +45,42 @@ class ThumbLoaderThread(QThread):
                 pixmap = self._load_fast(path, size)
                 if pixmap and not pixmap.isNull():
                     self.thumbnail_ready.emit(path, size, pixmap)
+                else:
+                    self.thumbnail_failed.emit(path, size)
             except Exception:
-                pass
+                self.thumbnail_failed.emit(path, size)
 
     def _load_fast(self, path: str, size: int) -> QPixmap | None:
         """Load thumbnail using PIL draft mode for fast downsampling."""
         try:
             from PIL import Image
 
-            img = Image.open(path)
-            # Draft mode: tells PIL to load at reduced resolution
-            # Only works for JPEG; for PNG it still loads full but
-            # PIL resize is faster than QPixmap.scaled for large images
-            if hasattr(img, 'draft'):
-                try:
-                    img.draft("RGB", (size * 2, size * 2))
-                except Exception:
-                    pass
+            with Image.open(path) as img:
+                # Draft mode: tells PIL to load at reduced resolution
+                # Only works for JPEG; for PNG it still loads full but
+                # PIL resize is faster than QPixmap.scaled for large images
+                if hasattr(img, 'draft'):
+                    try:
+                        img.draft("RGB", (size * 2, size * 2))
+                    except Exception:
+                        pass
 
-            # Fast thumbnail — modifies in-place, very efficient
-            img.thumbnail((size, size), Image.Resampling.LANCZOS)
+                # Fast thumbnail — modifies in-place, very efficient
+                img.thumbnail((size, size), Image.Resampling.LANCZOS)
 
-            # Convert to QPixmap via QImage with correct stride
-            if img.mode == "RGBA":
-                data = img.tobytes("raw", "BGRA")
-                bpl = img.width * 4
-                fmt = QImage.Format.Format_ARGB32
-            else:
-                img = img.convert("RGB")
-                data = img.tobytes("raw", "RGB")
-                bpl = img.width * 3
-                fmt = QImage.Format.Format_RGB888
+                # Convert to QPixmap via QImage with correct stride
+                if img.mode == "RGBA":
+                    data = img.tobytes("raw", "BGRA")
+                    bpl = img.width * 4
+                    fmt = QImage.Format.Format_ARGB32
+                else:
+                    img = img.convert("RGB")
+                    data = img.tobytes("raw", "RGB")
+                    bpl = img.width * 3
+                    fmt = QImage.Format.Format_RGB888
 
-            qimg = QImage(data, img.width, img.height, bpl, fmt)
-            return QPixmap.fromImage(qimg.copy())
+                qimg = QImage(data, img.width, img.height, bpl, fmt)
+                return QPixmap.fromImage(qimg.copy())
 
         except Exception:
             # Fallback to QPixmap if PIL fails
@@ -115,6 +117,7 @@ class ThumbCache:
         for _ in range(2):
             loader = ThumbLoaderThread()
             loader.thumbnail_ready.connect(self._on_loaded)
+            loader.thumbnail_failed.connect(self._on_failed)
             loader.start()
             self._loaders.append(loader)
         self._loader_idx = 0
@@ -166,6 +169,12 @@ class ThumbCache:
             cbs = self._callbacks.pop(key, [])
         for cb in cbs:
             cb(path, pixmap)
+
+    def _on_failed(self, path: str, size: int) -> None:
+        key = f"{path}:{size}"
+        with self._lock:
+            self._pending.discard(key)
+            self._callbacks.pop(key, None)
 
     def cancel_pending(self) -> None:
         for loader in self._loaders:

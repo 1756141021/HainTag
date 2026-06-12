@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -19,7 +18,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..file_filters import image_filter
 from ..metadata import MetadataReader, ImageMetadata
 from ..theme import current_palette
 from ..ui_tokens import CLS_FIELD_LABEL, CLS_METADATA_FRAME, CLS_METADATA_TEXT, _dp

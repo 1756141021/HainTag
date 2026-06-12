@@ -170,7 +170,7 @@ class UpdateChecker(QThread):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
-            raise last_error if "last_error" in locals() else exc
+            raise (last_error if "last_error" in locals() else exc) from exc
 
 
 class UpdateDownloadWorker(QThread):
@@ -268,7 +268,7 @@ class UpdateDownloadWorker(QThread):
             resp = urllib.request.urlopen(req, timeout=120)
             total = int(resp.headers.get("Content-Length", 0))
         except Exception as exc:
-            raise last_error or exc
+            raise (last_error or exc) from exc
 
         def _chunks():
             while True:
@@ -297,25 +297,75 @@ class UpdateDownloadWorker(QThread):
                     )
 
 
-def _generate_update_script(pid: int, source_dir: str,
+def _find_update_source(extracted_dir: str, exe_name: str = "HainTag.exe") -> str | None:
+    """Locate the directory inside an extracted update that holds the app exe.
+
+    Release zips currently wrap everything in a top-level ``HainTag/`` folder,
+    but the layout is not guaranteed — mirroring the wrong level with
+    robocopy /MIR would wipe the install dir, so the exe is located instead
+    of assuming a folder name.
+    """
+    target = exe_name.lower()
+    try:
+        entries = os.listdir(extracted_dir)
+    except OSError:
+        return None
+    if any(entry.lower() == target for entry in entries):
+        return extracted_dir
+    for entry in entries:
+        sub = os.path.join(extracted_dir, entry)
+        if not os.path.isdir(sub):
+            continue
+        try:
+            if any(name.lower() == target for name in os.listdir(sub)):
+                return sub
+        except OSError:
+            continue
+    return None
+
+
+def _generate_update_script(source_dir: str,
                             target_dir: str, exe_path: str,
                             failed_message: str = "Update failed",
                             cleanup_dir: str | None = None) -> str:
-    """Write a batch script with baked-in paths and return its path."""
+    """Write a batch script with baked-in paths and return its path.
+
+    The script runs in a console-less cmd (DETACHED_PROCESS). Console
+    commands (timeout, pause) fail instantly there and ``tasklist | find``
+    deadlocks on its pipe, so app exit is detected by polling the write
+    lock Windows holds on the running exe; ``ping`` is the sleep, system
+    tools are addressed by absolute path (PATH may resolve to GNU tools
+    from Git Bash), and failures are reported via %TEMP%/haintag_update.log
+    (keeping the download on disk for retry) instead of an invisible echo.
+    """
     clean_target = cleanup_dir or source_dir
+    log_path = os.path.join(tempfile.gettempdir(), "haintag_update.log")
+    sys32 = '%SystemRoot%\\System32\\'
     content = (
         '@echo off\n'
         'chcp 65001 >nul 2>&1\n'
+        'set /a tries=0\n'
         ':wait\n'
-        f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul && '
-        '(timeout /t 1 /nobreak >nul & goto wait)\n'
-        'timeout /t 1 /nobreak >nul\n'
-        f'robocopy "{source_dir}" "{target_dir}" '
+        'set /a tries+=1\n'
+        'if %tries% GTR 120 goto copy\n'
+        f'2>nul (>> "{exe_path}" call ) && goto copy\n'
+        f'{sys32}ping.exe -n 2 127.0.0.1 >nul\n'
+        'goto wait\n'
+        ':copy\n'
+        f'{sys32}Robocopy.exe "{source_dir}" "{target_dir}" '
         '/MIR /R:3 /W:2 /NP /NFL /NDL /NJH /NJS\n'
-        f'if %errorlevel% GTR 7 (echo {failed_message} & pause & goto end)\n'
+        'set rc=%errorlevel%\n'
+        'if %rc% GTR 7 goto failed\n'
         f'start "" "{exe_path}"\n'
-        ':end\n'
         f'rd /s /q "{clean_target}" >nul 2>&1\n'
+        'goto done\n'
+        ':failed\n'
+        f'echo {failed_message} > "{log_path}"\n'
+        f'echo robocopy exit code %rc% >> "{log_path}"\n'
+        f'echo source: {source_dir} >> "{log_path}"\n'
+        f'echo target: {target_dir} >> "{log_path}"\n'
+        f'if exist "{exe_path}" start "" "{exe_path}"\n'
+        ':done\n'
         '(goto) 2>nul & del "%~f0"\n'
     )
     path = os.path.join(tempfile.gettempdir(), "haintag_update.bat")
@@ -448,10 +498,6 @@ class UpdateDialog(QDialog):
     @property
     def extracted_dir(self) -> str:
         return self._extracted_dir
-
-    @property
-    def version(self) -> str:
-        return self.windowTitle()
 
     def _on_skip(self):
         self._result_action = self.SKIP

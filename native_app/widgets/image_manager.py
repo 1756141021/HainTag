@@ -17,30 +17,26 @@ from PyQt6.QtCore import (
     QMimeData,
     QModelIndex,
     QPoint,
-    QRect,
     QSize,
     QTimer,
     QUrl,
     Qt,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor, QCursor, QKeyEvent, QMouseEvent, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QColor, QCursor, QDesktopServices, QMouseEvent, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListView,
     QMenu,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QSlider,
     QSpinBox,
-    QSplitter,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -930,7 +926,6 @@ class DetailPanel(QWidget):
             f"border-radius: 4px; color: {p['text_muted']}; font-size: {_fs('fs_10')}; "
             f"padding: 4px 8px; letter-spacing: 0.5px;"
         )
-        btn_hover = f"color: {p['text']}; border-color: {p['line_strong']};"
         for key, slot in [("copy", self._copy), ("im_copy_lora", self._copy_lora),
                           ("metadata_send_to_input", self._send), ("metadata_use_as_example", self._example)]:
             btn = QPushButton(translator.t(key), self)
@@ -1675,7 +1670,7 @@ class ImageManagerWindow(QWidget):
         self._update_status()
         QTimer.singleShot(200, self._req_thumbs)
 
-    def _sel_changed(self, cur, _prev):
+    def _sel_changed(self, _cur, _prev):
         pass  # Detail is handled by click and hover
 
     def _on_click(self, idx):
@@ -1849,7 +1844,10 @@ class ImageManagerWindow(QWidget):
             if self._storage:
                 self._storage.save_likes(self._likes)
         elif chosen == loc_act and len(paths) == 1:
-            subprocess.Popen(f'explorer /select,"{paths[0]}"')
+            if sys.platform == "win32":
+                subprocess.Popen(f'explorer /select,"{paths[0]}"')
+            else:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(paths[0])))
         elif chosen == destroy_act:
             if _StyledDialog.confirm(self, t.t("im_destroy_metadata"),
                     t.t("im_destroy_confirm").replace("{count}", str(len(paths)))):

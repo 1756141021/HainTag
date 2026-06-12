@@ -7,7 +7,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal, QThread, QMimeData
 from PyQt6.QtGui import (
-    QAction,
     QColor,
     QDragEnterEvent,
     QDropEvent,
@@ -33,10 +32,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..file_filters import image_filter, png_filter
+from ..file_filters import png_filter
 from ..metadata import MetadataWriter
 from ..theme import _fs, current_palette
-from ..ui_tokens import CLS_METADATA_FRAME, CLS_METADATA_RESULT_ITEM, CLS_METADATA_STATUS_OK, _dp
+from ..ui_tokens import CLS_METADATA_FRAME, CLS_METADATA_RESULT_ITEM, _dp
 from .text_context_menu import apply_app_menu_style, install_localized_context_menus
 
 
@@ -435,7 +434,7 @@ class MetadataDestroyerWidget(QWidget):
 
     def _enter_edit_mode(self) -> None:
         """Show editable metadata fields for the source image."""
-        from ..metadata import MetadataReader, ImageMetadata
+        from ..metadata import MetadataReader
         from .collapsible_section import CollapsibleSection
 
         if not self._single_src:

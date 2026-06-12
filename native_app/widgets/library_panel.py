@@ -2,12 +2,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QColor, QIcon, QPixmap
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -20,7 +18,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..file_filters import image_filter
 from ..models import ArtistEntry, OCEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette
@@ -654,7 +651,6 @@ class OCBanner(QWidget):
             self._add_outfit(o)
 
     def entry(self) -> OCEntry:
-        from ..models import OutfitEntry
         outfits = [r.outfit() for r in self._outfit_rows]
         return OCEntry(
             character_name=self._name_edit.text().strip(),

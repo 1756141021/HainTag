@@ -103,7 +103,6 @@ class MetadataReader:
                             rest = chunk_data[null_idx + 1:]
                             if len(rest) >= 2:
                                 comp_flag = rest[0]
-                                comp_method = rest[1]
                                 rest = rest[2:]
                                 # Skip language tag
                                 lang_end = rest.find(b"\x00")
@@ -145,11 +144,9 @@ class MetadataReader:
         """Read EXIF UserComment from JPEG/WebP (A1111 format)."""
         try:
             from PIL import Image
-            from PIL.ExifTags import Base as ExifBase
 
-            img = Image.open(path)
-            exif = img.getexif()
-            img.close()
+            with Image.open(path) as img:
+                exif = img.getexif()
 
             # UserComment tag ID = 0x9286
             user_comment = exif.get(0x9286, "")

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QPoint, QPropertyAnimation, QEasingCurve, QRect, QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QRegion
+from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ..i18n import Translator

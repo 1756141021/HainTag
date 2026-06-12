@@ -8,11 +8,9 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
 from ..i18n import Translator

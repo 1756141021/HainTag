@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 # ── Theme state (set by generate_qss, read by custom-painted widgets) ──
 _is_light: bool = False
@@ -1109,8 +1108,8 @@ def extract_palette_from_image(path: str) -> dict[str, str]:
         return dict(DARK_PALETTE)
 
     try:
-        img = Image.open(path).convert('RGB')
-        img = img.resize((80, 80), Image.Resampling.LANCZOS)
+        with Image.open(path) as src:
+            img = src.convert('RGB').resize((80, 80), Image.Resampling.LANCZOS)
     except Exception:
         return dict(DARK_PALETTE)
 

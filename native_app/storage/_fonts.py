@@ -50,7 +50,6 @@ class FontStorage:
         return None
 
     def font_file_path(self, font_id: str):
-        from pathlib import Path
         entry = self._find_font_entry(font_id)
         if entry is None:
             return None

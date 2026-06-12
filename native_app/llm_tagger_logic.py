@@ -39,7 +39,9 @@ def parse_llm_tags(raw_text: str) -> list[str]:
 
 def _normalize_tag(raw: str) -> str:
     t = raw.strip().lower().replace(" ", "_")
-    t = re.sub(r"^[\d\.\-\)\]\*]+\s*", "", t)
+    # Strip list numbering ("1." / "2)" / "3]") and bullets, but not digits
+    # that belong to the tag itself (1girl, 2girls, 1boy).
+    t = re.sub(r"^(?:\d+[\.\)\]]|[\-\*\.\)\]]+)\s*", "", t)
     t = t.strip("_").strip()
     return t
 

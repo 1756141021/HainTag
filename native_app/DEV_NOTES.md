@@ -10,6 +10,10 @@
 ## __main__.py
 - 入口点，一行代码调用 `main()`
 
+## app_paths.py
+- `app_data_dir(app_name)`：各平台用户数据目录唯一出处（macOS `~/Library/Application Support`，Windows `%APPDATA%`）
+- storage、python_env、models、interrogator、window 统一从这里取路径
+
 ## main.py
 - 应用启动流程：创建 QApplication → 加载字体 → 设置 QFont → 生成 QSS（含 body_font_pt + font_family） → 创建 MainWindow → exec 事件循环
 - 全局异常处理钩子（sys.excepthook）
@@ -132,10 +136,11 @@
 - `load_app_fonts()`：从 resources/fonts/ 加载内嵌字体
 - `build_body_font()`：根据 font_profile 和 point_size 构建 QFont
 - `create_app_font()`：创建应用级字体
+- `font_family_css(profile, custom_family)`：生成 QSS font-family 值，仅保留已安装字体并追加平台系统字体兜底（PingFang/雅黑/Noto）
 
 ## llm_tagger_logic.py
 - LLM 反推处理逻辑，纯函数模块，无 UI 依赖
-- `parse_llm_tags(raw_text) → list[str]`：解析 LLM 输出为独立 tag。逗号分割优先，fallback 换行分割，去重去格式
+- `parse_llm_tags(raw_text) → list[str]`：解析 LLM 输出为独立 tag。逗号分割优先，fallback 换行分割，去重去格式；编号/项目符号剥离保留 tag 自带数字（1girl/2girls）
 - `validate_tags(tags, dictionary) → list[ParsedTag]`：用 TagDictionary 校验 tag 有效性，填充 category_id + 中文翻译
 - `build_vision_messages(image_path, prompt_text) → list[dict]`：构建 OpenAI 多模态 vision messages（base64 图片）
 
@@ -186,7 +191,7 @@
   - `request(path, size, callback)` → 缓存 miss 时排队后台加载，完成后回调
   - `cancel_pending()` → 清空队列（排序/缩放切换时用）
   - `ThumbLoaderThread`（QThread × 2，round-robin 分发）：PIL `draft()` + `thumbnail()` 快速降采样，`QImage` 带显式 `bytesPerLine` 避免 stride 对齐问题
-  - 信号：`thumbnail_ready(path, size, QPixmap)`
+  - 信号：`thumbnail_ready(path, size, QPixmap)` / `thumbnail_failed(path, size)`（失败时清理 pending 与回调，键可重试）
 
 ## tagger.py
 - **TaggerEngine 类**：cl_tagger ONNX 推理引擎，支持两种模式
@@ -210,8 +215,8 @@
 - 错误时输出详细 debug 信息（sys.path、sys.prefix、环境变量、traceback）
 
 ## python_env.py
-- **嵌入式 Python 环境管理器**：当 onnxruntime 在宿主 Python 不可用时，自动下载独立 Python 环境
-- `get_embedded_python_path()`：检查 `%APPDATA%/HainTag/python_env/python.exe` 是否存在
+- **托管 Python 环境管理器**：当 onnxruntime 在宿主 Python 不可用时自动准备独立环境（Windows 下载嵌入式包；macOS 用宿主 python3 建 venv）
+- `get_embedded_python_path()`：检查用户数据目录 `python_env/` 下的解释器是否存在（按平台布局）
 - `is_env_usable(path)`：subprocess 测试 onnxruntime 是否可导入
 - **PythonEnvSetupWorker**（QThread）：后台下载安装流水线
   - 下载 Python 3.12 嵌入式包 → 解压 → 修补 ._pth → 安装 pip → pip install onnxruntime/numpy/Pillow
@@ -233,16 +238,18 @@
   - 三级 HTTP fallback 分块下载（8KB chunks），每 chunk 检查取消标志
   - 验证：`zipfile.testzip()` + 确认任意路径下存在 `haintag.exe`（支持 flat 和子目录两种 ZIP 结构）
   - 解压到临时目录，删除 ZIP，emit `download_done(extracted_dir)`
-- **`_generate_update_script(pid, source_dir, target_dir, exe_path, failed_message, cleanup_dir)`**：生成 batch 替换脚本写入 %TEMP%
-  - 等待旧 PID 退出 → `robocopy /MIR source_dir→target_dir` → 启动新 exe → 清理 `cleanup_dir`（默认 `source_dir`）→ 自删除
-  - `source_dir` 由调用方传入已解析的目录（不再硬编码 `\\HainTag` 子目录）
+- **`_find_update_source(extracted_dir, exe_name)`**：在解压目录顶层及一级子目录定位含 HainTag.exe 的目录（大小写不敏感），找不到返回 None
+- **`_generate_update_script(source_dir, target_dir, exe_path, failed_message, cleanup_dir)`**：生成 batch 替换脚本写入 %TEMP%
+  - 脚本运行在无控制台 cmd（DETACHED_PROCESS）：轮询 exe 写锁判断旧进程退出（timeout/pause 在无控制台下失效、`tasklist | find` 管道会死锁），`ping` 作 sleep，系统工具走 System32 绝对路径
+  - 等待上限 120 轮 → `robocopy /MIR source_dir→target_dir` → 成功：启动新 exe + 清理 `cleanup_dir` → 自删除
+  - 失败（robocopy rc>7）：写 `%TEMP%\haintag_update.log`、保留下载目录、尝试拉起旧 exe
 - **UpdateDialog**（QDialog）：更新提示弹窗
   - 显示新版本号 + changelog
   - 三个按钮：立即更新 / 跳过此版本（存 skipped_version）/ 下次提醒
   - 点击更新后：隐藏按钮，显示进度条 + 取消按钮，下载完成后 accept
   - 源码模式（`sys.frozen` 不存在）fallback 打开浏览器
 - **NoUpdateDialog**：已是最新版提示
-- window.py 中：`_check_update_auto()`（启动 3s 后自动，尊重 skipped_version）/ `check_update_manual()`（设置面板按钮，忽略 skip）/ `_apply_update()`（自动探测 `HainTag/` 子目录，决定 robocopy 源路径，写脚本 → 保存状态 → 启动脚本 → 退出）
+- window.py 中：`_check_update_auto()`（启动 3s 后自动，尊重 skipped_version）/ `check_update_manual()`（设置面板按钮，忽略 skip；自动检查进行中时改接其信号保证必有结果弹窗）/ `_apply_update()`（`_find_update_source` 定位源目录，找不到则中止提示，写脚本 → 保存状态 → 启动脚本 → 退出）
 
 ## resources/
 - `resources/lang/zh-CN.json`：中文翻译（所有 UI 字符串）

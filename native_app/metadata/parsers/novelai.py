@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import struct
 import zlib
 
 from ..models import GeneratorType, ImageMetadata
@@ -95,19 +94,19 @@ class NovelAIParser(BaseMetadataParser):
             return None
 
         try:
-            img = Image.open(image_path)
-            if img.mode != "RGBA":
-                return None
+            with Image.open(image_path) as img:
+                if img.mode != "RGBA":
+                    return None
 
-            pixels = img.load()
-            width, height = img.size
+                pixels = img.load()
+                width, height = img.size
 
-            # Read bits from alpha channel LSBs (column-major: x outer, y inner)
-            bits: list[int] = []
-            for x in range(width):
-                for y in range(height):
-                    alpha = pixels[x, y][3]
-                    bits.append(alpha & 1)
+                # Read bits from alpha channel LSBs (column-major: x outer, y inner)
+                bits: list[int] = []
+                for x in range(width):
+                    for y in range(height):
+                        alpha = pixels[x, y][3]
+                        bits.append(alpha & 1)
 
             # Convert bits to bytes
             def bits_to_bytes(bit_list: list[int]) -> bytes:

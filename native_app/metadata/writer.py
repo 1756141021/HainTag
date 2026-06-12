@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import re
 import struct
 import zlib
 from typing import BinaryIO
@@ -98,24 +96,23 @@ class MetadataWriter:
         try:
             from PIL import Image
 
-            img = Image.open(src)
-            if img.mode != "RGBA":
-                # No alpha channel, just copy
-                import shutil
-                shutil.copy2(src, dst)
-                return
+            with Image.open(src) as img:
+                if img.mode != "RGBA":
+                    # No alpha channel, just copy
+                    import shutil
+                    shutil.copy2(src, dst)
+                    return
 
-            pixels = img.load()
-            width, height = img.size
+                pixels = img.load()
+                width, height = img.size
 
-            # Clear LSB of all alpha values
-            for x in range(width):
-                for y in range(height):
-                    r, g, b, a = pixels[x, y]
-                    pixels[x, y] = (r, g, b, a & 0xFE)
+                # Clear LSB of all alpha values
+                for x in range(width):
+                    for y in range(height):
+                        r, g, b, a = pixels[x, y]
+                        pixels[x, y] = (r, g, b, a & 0xFE)
 
-            img.save(dst, "PNG")
-            img.close()
+                img.save(dst, "PNG")
         except Exception:
             import shutil
             shutil.copy2(src, dst)
@@ -138,7 +135,7 @@ class MetadataWriter:
                 length = struct.unpack(">I", length_bytes)[0]
                 chunk_type = f.read(4)
                 chunk_data = f.read(length)
-                crc = f.read(4)  # CRC covers type + data
+                f.read(4)  # CRC covers type + data
                 chunks.append((chunk_type, chunk_data))
 
         return chunks

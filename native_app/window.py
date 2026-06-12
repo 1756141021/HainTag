@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
     QAbstractSpinBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -50,6 +49,7 @@ from .theme import _fs, current_palette
 from .i18n import Translator
 from .logic import build_messages, estimate_messages_tokens, normalize_api_base_url, validate_examples
 from .models import (
+    AppSettings,
     AppState,
     DockPosition,
     DockState,
@@ -66,12 +66,10 @@ from .models import (
     CONFIG_SCOPE_APPEARANCE,
     CONFIG_SCOPE_ARTIST_LIBRARY,
     CONFIG_SCOPE_ENTRY_DEFAULTS,
-    CONFIG_SCOPE_EXAMPLES,
     CONFIG_SCOPE_FULL_PROFILE,
     CONFIG_SCOPE_HISTORY,
     CONFIG_SCOPE_MODEL_PARAMS,
     CONFIG_SCOPE_OC_LIBRARY,
-    CONFIG_SCOPE_PROMPTS,
     CONFIG_SCOPE_SETTINGS_PAGE,
     CONFIG_SCOPE_TAG_MARKERS,
     CONFIG_SCOPE_WINDOW_LAYOUT,
@@ -89,7 +87,6 @@ from .ui_tokens import (
     WINDOW_EDGE_GAP,
     WINDOW_SURFACE_MARGIN,
     WINDOW_VISIBLE_RESIZE_BAND,
-    WORKSPACE_PADDING,
     _dp,
 )
 from .widgets.dock import DockPanel
@@ -159,24 +156,28 @@ def _locate_data_file(name: str) -> Path | None:
 
 
 def _resolve_tag_dictionary_csv() -> Path | None:
-    """Return the Danbooru CSV path to load, seeding the user copy first run.
+    """Return the Danbooru CSV path to load, seeding the user copy as needed.
 
     The dictionary lives in the user app-data dir so it can be updated
     independently of the app (and because a copy inside a signed .app is
-    read-only). On first run we seed that copy from the bundled/source CSV
-    if one is present; thereafter the user copy is authoritative and can be
-    replaced to update the dictionary without rebuilding.
+    read-only). The user copy is (re)seeded from the bundled/source CSV when
+    it is missing or the bundled copy is newer (copy2 preserves mtime, so a
+    new release reseeds once; a hand-replaced newer dictionary is kept).
     """
     name = 'danbooru_all_2.csv'
     user_csv = app_data_dir() / name
-    if not user_csv.exists():
-        bundled = _locate_data_file(name)
-        if bundled is not None:
-            try:
+    bundled = _locate_data_file(name)
+    if bundled is not None:
+        try:
+            needs_seed = (
+                not user_csv.exists()
+                or bundled.stat().st_mtime > user_csv.stat().st_mtime
+            )
+            if needs_seed:
                 user_csv.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(bundled, user_csv)
-            except OSError:
-                return bundled  # can't seed — read the bundled copy in place
+        except OSError:
+            return bundled  # can't seed — read the bundled copy in place
     return user_csv if user_csv.exists() else None
 
 
@@ -1084,7 +1085,7 @@ class MainWindow(QWidget):
         shown = self._show_tray_member_near_tray(widget_id)
         if not shown:
             return
-        self._sync_floating_tray(auto_restore_single=False)
+        self._sync_floating_tray()
         self._schedule_save()
 
     def _close_floating_tray(self) -> None:
@@ -1138,7 +1139,7 @@ class MainWindow(QWidget):
         if member is None or card is None:
             return False
         if not self._floating_tray.isVisible():
-            self._sync_floating_tray(auto_restore_single=False)
+            self._sync_floating_tray()
         target = self._tray_adjacent_rect(member, card)
         if not getattr(card, "_floating", False):
             card.float_out(QPoint(target.x() + target.width() // 2, target.y() + _dp(16)))
@@ -1174,7 +1175,7 @@ class MainWindow(QWidget):
         self._refresh_dock_items()
         return True
 
-    def _sync_floating_tray(self, *, auto_restore_single: bool = False) -> None:
+    def _sync_floating_tray(self) -> None:
         member_ids = self._floating_tray.member_ids()
         if len(member_ids) == 1:
             self._restore_lonely_tray_member(member_ids[0])
@@ -1188,7 +1189,7 @@ class MainWindow(QWidget):
 
     def _restore_floating_tray_state(self) -> None:
         if self._floating_tray.member_ids():
-            self._sync_floating_tray(auto_restore_single=False)
+            self._sync_floating_tray()
             self._refresh_dock_items()
             self._on_main_card_visibility_changed()
             return
@@ -1215,7 +1216,7 @@ class MainWindow(QWidget):
                 card.show()
                 self._store_card_in_tray(card)
             self._floating_tray.set_labels(self._card_labels)
-            self._sync_floating_tray(auto_restore_single=False)
+            self._sync_floating_tray()
         else:
             self._floating_tray.restore_state(
                 FloatingTrayState(visible=False, x=state.x, y=state.y, members=[])
@@ -1238,7 +1239,7 @@ class MainWindow(QWidget):
         if tray_rect is not None and tray_rect.adjusted(-24, -24, 24, 24).intersects(self._card_screen_rect(card)):
             if not self._store_card_in_tray(card):
                 return
-            self._sync_floating_tray(auto_restore_single=False)
+            self._sync_floating_tray()
             self._schedule_save()
             return
 
@@ -1267,7 +1268,7 @@ class MainWindow(QWidget):
                 self._store_card_in_tray(member)
         finally:
             self._floating_tray.end_batch_update()
-        self._sync_floating_tray(auto_restore_single=False)
+        self._sync_floating_tray()
         self._schedule_save()
 
     def _schedule_floating_tray_check(self, widget_id: str) -> None:
@@ -1311,7 +1312,7 @@ class MainWindow(QWidget):
     def _dock_card(self, widget_id: str) -> None:
         if self._floating_tray.has_member(widget_id):
             self._floating_tray.remove_member(widget_id)
-            self._sync_floating_tray(auto_restore_single=False)
+            self._sync_floating_tray()
         card = self.workspace.card(widget_id)
         if card is not None and getattr(card, "_floating", False) and getattr(card, "_workspace_parent", None):
             card.float_back(card._workspace_parent)
@@ -3752,6 +3753,18 @@ class MainWindow(QWidget):
         is_running = getattr(checker, "isRunning", None)
         if checker is not None and callable(is_running) and is_running():
             self._set_update_checking(True)
+            # The running checker is the silent auto-check: rewire it so this
+            # manual request always produces a visible result.
+            for signal in (checker.update_available, checker.no_update, checker.check_error):
+                try:
+                    signal.disconnect()
+                except TypeError:
+                    pass
+            checker.update_available.connect(
+                lambda ver, cl, url: self._show_update_dialog(ver, cl, url, auto=False)
+            )
+            checker.no_update.connect(self._show_no_update)
+            checker.check_error.connect(self._show_update_error)
             if hasattr(checker, "finished"):
                 checker.finished.connect(lambda: self._set_update_checking(False))
             self.input_widget.append_status_line(self._translator.t("update_checking"))
@@ -3804,13 +3817,13 @@ class MainWindow(QWidget):
         )
 
     def _apply_update(self, extracted_dir: str) -> None:
-        import os
         import subprocess
-        from .updater import _generate_update_script
-        subdir = os.path.join(extracted_dir, "HainTag")
-        source_dir = subdir if os.path.isdir(subdir) else extracted_dir
+        from .updater import _find_update_source, _generate_update_script
+        source_dir = _find_update_source(extracted_dir, Path(sys.executable).name)
+        if source_dir is None:
+            self.input_widget.append_status_line(self._translator.t("update_apply_failed"))
+            return
         script = _generate_update_script(
-            pid=os.getpid(),
             source_dir=source_dir,
             target_dir=os.path.dirname(sys.executable),
             exe_path=sys.executable,

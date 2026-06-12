@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QFrame, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QWidget
 
 from ..theme import _fs, current_palette
 from ..ui_tokens import WIDGET_RESIZE_CORNER, WIDGET_RESIZE_EDGE, WIDGET_RESIZE_HINT, _dp

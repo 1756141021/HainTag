@@ -1,20 +1,17 @@
 """Image Interrogator — local tagger + LLM vision tag inference."""
 from __future__ import annotations
 
-import base64
 import os
 import sys
 from functools import partial
-from pathlib import Path
 
 from PyQt6.QtCore import QRect, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QDesktopServices, QIcon, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -298,7 +295,7 @@ class _LocalTaggerTab(QWidget):
         self._local_character_threshold = 70
         self._show_conf = True
 
-        from ..tagger import CATEGORY_NAMES, DEFAULT_ENABLED_CATEGORIES, DEFAULT_BLACKLIST
+        from ..tagger import DEFAULT_ENABLED_CATEGORIES, DEFAULT_BLACKLIST
         self._enabled_categories = set(DEFAULT_ENABLED_CATEGORIES)
         self._blacklist = list(DEFAULT_BLACKLIST)
 
@@ -538,7 +535,6 @@ class _LocalTaggerTab(QWidget):
 
     def _build_ready_page(self) -> QWidget:
         p = current_palette()
-        c = _local_colors()
         page = QWidget()
         page.setObjectName("LocalReadyPage")
         layout = QVBoxLayout(page)
@@ -1622,7 +1618,6 @@ class _LocalTaggerTab(QWidget):
 
     def _toggle_confidence(self):
         self._show_conf = not self._show_conf
-        p = current_palette()
         if self._show_conf:
             self._conf_btn.setText(self._t.t("interr_hide_conf"))
         else:
@@ -2153,7 +2148,7 @@ class _LLMTaggerTab(QWidget):
         self._prompt_edit = QTextEdit(self._edit_panel)
         self._prompt_edit.setMinimumHeight(_dp(60))
         self._prompt_edit.setMaximumHeight(_dp(96))
-        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_prompt"))
+        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_default_prompt"))
         self._prompt_edit.textChanged.connect(self._on_text_edited)
         edit_layout.addWidget(self._prompt_edit)
 
@@ -2436,8 +2431,12 @@ class _LLMTaggerTab(QWidget):
     def _get_prompt_text(self) -> str:
         idx = self._preset_combo.currentIndex()
         if 0 <= idx < len(self._presets):
-            return self._presets[idx].get("text", "").strip()
-        return self._prompt_edit.toPlainText().strip()
+            text = self._presets[idx].get("text", "").strip()
+        else:
+            text = self._prompt_edit.toPlainText().strip()
+        # An empty prompt makes vision models return prose, which parses to
+        # zero valid tags — fall back to the built-in tags-only instruction.
+        return text or self._t.t("interrogator_llm_default_prompt")
 
     # ── Batch processing ──
 
@@ -2940,7 +2939,7 @@ class _LLMTaggerTab(QWidget):
 
     def retranslate_ui(self):
         self._name_edit.setPlaceholderText(self._t.t("llm_tagger_preset_name"))
-        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_prompt"))
+        self._prompt_edit.setPlaceholderText(self._t.t("interrogator_llm_default_prompt"))
         self._api_toggle.setText(self._t.t("llm_tagger_use_separate_api"))
         self._separate_url.setPlaceholderText(self._t.t("llm_tagger_api_base_url"))
         self._separate_key.setPlaceholderText(self._t.t("llm_tagger_api_key"))

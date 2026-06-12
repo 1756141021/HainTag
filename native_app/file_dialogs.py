@@ -11,7 +11,6 @@ spot.
 from __future__ import annotations
 
 import os
-from typing import Sequence
 
 from PyQt6.QtWidgets import QFileDialog, QWidget
 

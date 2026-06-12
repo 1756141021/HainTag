@@ -120,8 +120,8 @@ def main():
             cat_map.append((info.get("category", "general") if isinstance(info, dict) else "general").lower())
 
     # Preprocess
-    image = Image.open(image_path)
-    input_tensor = preprocess(image)
+    with Image.open(image_path) as image:
+        input_tensor = preprocess(image)
 
     # Inference
     input_name = session.get_inputs()[0].name

@@ -4,8 +4,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from pathlib import Path
-from typing import Any
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -55,9 +53,6 @@ DEFAULT_ENABLED_CATEGORIES = {"general", "character", "copyright"}
 def is_local_tagger_available() -> bool:
     """Check if all deps are importable. Only used for UI hints, not as a gate."""
     try:
-        import onnxruntime
-        import numpy
-        from PIL import Image as _
         return True
     except Exception:
         return False
@@ -256,8 +251,8 @@ class TaggerEngine:
             blacklist = DEFAULT_BLACKLIST
 
         blacklist_set = set(blacklist)
-        image = Image.open(image_path)
-        input_tensor = _preprocess(image)
+        with Image.open(image_path) as image:
+            input_tensor = _preprocess(image)
 
         input_name = self._session.get_inputs()[0].name
         output_name = self._session.get_outputs()[0].name
@@ -365,9 +360,9 @@ class TaggerEngine:
                 env=clean_env,
             )
         except FileNotFoundError:
-            raise RuntimeError(f"无法执行: {python}")
+            raise RuntimeError(f"无法执行: {python}") from None
         except subprocess.TimeoutExpired:
-            raise RuntimeError("推理超时 (60s)")
+            raise RuntimeError("推理超时 (60s)") from None
 
         if result.returncode != 0:
             err = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"

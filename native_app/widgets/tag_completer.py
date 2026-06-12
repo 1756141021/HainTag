@@ -486,6 +486,10 @@ def install_completer(edit: TextEditor, dictionary: TagDictionary, min_chars: in
         return getattr(edit, "_tag_completer_popup", None)
 
     popup = TagCompleterPopup(edit.window())
+    # Deliberately parentless: a timer parented to `edit` still fires during
+    # edit's destruction, when sip.isdeleted() is False but the C++ object is
+    # already half-dead — that's a native crash no Python guard can catch.
+    # Lifetime is handled by the sip.isdeleted polling in _check_active.
     _timer = QTimer()
     _timer.setSingleShot(True)
     _timer.setInterval(150)

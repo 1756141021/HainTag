@@ -5,7 +5,6 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -17,7 +16,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ..i18n import Translator
-from ..file_filters import image_filter
 from ..models import ExampleEntry
 from ..storage import AppStorage
 from ..theme import _fs, current_palette

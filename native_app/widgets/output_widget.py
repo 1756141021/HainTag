@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from html import escape
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import (
@@ -10,7 +10,6 @@ from PyQt6.QtGui import (
     QMouseEvent,
     QPainter,
     QPolygon,
-    QPalette,
     QSyntaxHighlighter,
     QTextCharFormat,
     QTextCursor,
@@ -458,7 +457,6 @@ class TagTextEdit(QTextEdit):
     def _apply_weight(self, tag: _TagSpan, new_weight: float) -> None:
         text = self.toPlainText()
         old_text = text[tag.start:tag.end]
-        stripped = old_text.strip()
 
         if abs(new_weight - 1.0) < 0.01:
             # Weight is 1.0 → strip to plain tag name
