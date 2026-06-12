@@ -45,19 +45,7 @@ jobs:
           pyinstaller AITagGenerator.spec --noconfirm
 
       - name: Verify build output
-        shell: pwsh
-        run: |
-          if (-not (Test-Path dist/HainTag/HainTag.exe)) { Write-Error "HainTag.exe missing"; exit 1 }
-          # PyInstaller 6 onedir puts datas in _internal/ (= sys._MEIPASS at runtime)
-          $csv = (Test-Path dist/HainTag/danbooru_all_2.csv) -or (Test-Path dist/HainTag/_internal/danbooru_all_2.csv)
-          if (-not $csv) { Write-Error "danbooru_all_2.csv missing from bundle"; exit 1 }
-          # v0.9.9 shipped these; missing one silently degrades thumbnails / blur /
-          # stealth parsing / model download. onnxruntime stays OUT by design
-          # (spec excludes it since the v0.9.2-era DLL conflict; inference runs
-          # in the managed python subprocess).
-          foreach ($m in @('PIL', 'numpy', 'huggingface_hub')) {
-            if (-not (Test-Path "dist/HainTag/_internal/$m")) { Write-Error "$m missing from bundle"; exit 1 }
-          }
+        run: python scripts/verify_bundle.py dist/HainTag
 
       - name: Package zip
         shell: pwsh
