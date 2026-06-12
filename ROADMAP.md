@@ -33,8 +33,8 @@
 
 | # | 事项 | 量 | 说明 |
 |---|------|----|------|
-| 10 | API key 入 OS keyring | M | 现为 settings.json 明文。Windows 凭据管理器，首启迁移，keyring 不可用回退明文+提示 |
-| 11 | 更新包 SHA256 校验 | S | release body 嵌 hash，updater 下载后校验（现仅 zip 完整性检查） |
+| ~~10~~ | ~~API key 入 OS keyring~~ | M | ✅ 2026-06-12 `secret_store.py` + storage seam：凭据管理器/Keychain，保存时隐式迁移，不可用回退明文+设置面板状态行 |
+| ~~11~~ | ~~更新包 SHA256 校验~~ | S | ✅ 2026-06-12 updater 解析 release body 的 SHA256 块，下载后校验；缺块跳过（兼容手动发版） |
 | 12 | 代码签名 | 待定 | Windows 证书有年费，成本决策项 |
 
 ## P3 — 远期架构

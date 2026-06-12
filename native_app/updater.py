@@ -1,6 +1,7 @@
 """Auto-update checker — queries GitHub Releases API."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -54,6 +55,41 @@ def _parse_version(tag: str) -> tuple[int, ...]:
 
 def _is_zip_download_url(url: str) -> bool:
     return str(url or "").lower().split("?", 1)[0].endswith(".zip")
+
+
+_SHA256_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\s+(\S+)\s*$", re.MULTILINE)
+
+
+def _parse_sha256_block(body: str) -> dict[str, str]:
+    """Parse the release body's ``### SHA256`` section into {filename: hash}.
+
+    The release workflow appends a fenced block of ``<sha256>  <filename>``
+    lines. Releases without the section (manual / pre-0.10.0) yield {} and
+    verification is skipped.
+    """
+    text = str(body or "")
+    marker = text.find("### SHA256")
+    if marker == -1:
+        return {}
+    return {
+        name.lower(): digest.lower()
+        for digest, name in _SHA256_LINE_RE.findall(text[marker:])
+    }
+
+
+def _expected_sha256_for_url(body: str, url: str) -> str | None:
+    name = str(url or "").split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
+    if not name:
+        return None
+    return _parse_sha256_block(body).get(name)
+
+
+def _file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _release_download_url(assets: list[Any]) -> str:
@@ -180,10 +216,12 @@ class UpdateDownloadWorker(QThread):
     download_done = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, url: str, translator, parent=None):
+    def __init__(self, url: str, translator,
+                 expected_sha256: str | None = None, parent=None):
         super().__init__(parent)
         self._url = url
         self._t = translator
+        self._expected_sha256 = expected_sha256
         self._cancelled = False
         self._temp_dir = ""
 
@@ -201,6 +239,10 @@ class UpdateDownloadWorker(QThread):
                 return
 
             self.progress.emit(self._t.t("update_validating"), 82)
+            if self._expected_sha256:
+                if _file_sha256(zip_path) != self._expected_sha256:
+                    raise RuntimeError(self._t.t("update_hash_mismatch"))
+
             with zipfile.ZipFile(zip_path, "r") as zf:
                 bad = zf.testzip()
                 if bad:
@@ -385,6 +427,7 @@ class UpdateDialog(QDialog):
                  translator, parent=None):
         super().__init__(parent)
         self._download_url = download_url
+        self._changelog = changelog
         self._result_action = self.LATER
         self._t = translator
         self._extracted_dir = ""
@@ -518,7 +561,8 @@ class UpdateDialog(QDialog):
         self._progress_label.show()
         self._progress_bar.show()
         self._cancel_btn.show()
-        self._worker = UpdateDownloadWorker(self._download_url, self._t, self)
+        expected = _expected_sha256_for_url(self._changelog, self._download_url)
+        self._worker = UpdateDownloadWorker(self._download_url, self._t, expected, self)
         self._worker.progress.connect(self._on_dl_progress)
         self._worker.download_done.connect(self._on_dl_done)
         self._worker.error.connect(self._on_dl_error)

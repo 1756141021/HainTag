@@ -1,11 +1,27 @@
-"""更新器纯逻辑：版本比较、资产选取、更新源目录探测（0.10.0 修复回归）。"""
+"""更新器纯逻辑：版本比较、资产选取、更新源目录探测、SHA256 校验（0.10.5）。"""
+import hashlib
+
 from native_app.updater import (
+    _expected_sha256_for_url,
+    _file_sha256,
     _find_update_source,
     _is_zip_download_url,
     _macos_download_url,
+    _parse_sha256_block,
     _parse_version,
     _windows_download_url,
 )
+
+SAMPLE_HASH = "a" * 64
+SAMPLE_BODY = f"""### Fixed
+- something
+
+### SHA256
+```
+{SAMPLE_HASH}  HainTag-v0.10.5.zip
+{'b' * 64}  HainTag-v0.10.5.dmg
+```
+"""
 
 
 class TestParseVersion:
@@ -95,3 +111,49 @@ class TestFindUpdateSource:
 
     def test_missing_dir_returns_none(self, tmp_path):
         assert _find_update_source(str(tmp_path / "nope")) is None
+
+
+class TestParseSha256Block:
+    def test_parses_filenames_and_hashes(self):
+        parsed = _parse_sha256_block(SAMPLE_BODY)
+        assert parsed["haintag-v0.10.5.zip"] == SAMPLE_HASH
+        assert len(parsed) == 2
+
+    def test_no_block_returns_empty(self):
+        assert _parse_sha256_block("### Fixed\n- stuff") == {}
+        assert _parse_sha256_block("") == {}
+        assert _parse_sha256_block(None) == {}
+
+    def test_uppercase_hex_normalized(self):
+        body = f"### SHA256\n{'A' * 64}  File.ZIP\n"
+        assert _parse_sha256_block(body)["file.zip"] == "a" * 64
+
+    def test_non_hash_lines_ignored(self):
+        body = "### SHA256\nnot a hash line\nshort123  file.zip\n"
+        assert _parse_sha256_block(body) == {}
+
+
+class TestExpectedSha256ForUrl:
+    def test_matches_url_basename(self):
+        url = "https://github.com/r/releases/download/v0.10.5/HainTag-v0.10.5.zip"
+        assert _expected_sha256_for_url(SAMPLE_BODY, url) == SAMPLE_HASH
+
+    def test_query_string_stripped(self):
+        url = "https://x/HainTag-v0.10.5.zip?token=abc"
+        assert _expected_sha256_for_url(SAMPLE_BODY, url) == SAMPLE_HASH
+
+    def test_unknown_file_returns_none(self):
+        assert _expected_sha256_for_url(SAMPLE_BODY, "https://x/other.zip") is None
+
+    def test_body_without_block_returns_none(self):
+        assert _expected_sha256_for_url("notes only", "https://x/HainTag-v0.10.5.zip") is None
+
+    def test_empty_url_returns_none(self):
+        assert _expected_sha256_for_url(SAMPLE_BODY, "") is None
+
+
+class TestFileSha256:
+    def test_matches_hashlib(self, tmp_path):
+        f = tmp_path / "blob.bin"
+        f.write_bytes(b"hello haintag" * 1000)
+        assert _file_sha256(str(f)) == hashlib.sha256(f.read_bytes()).hexdigest()

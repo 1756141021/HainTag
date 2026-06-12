@@ -7,6 +7,12 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-06-12
+
+### Added
+- **更新包 SHA256 校验** — 自动更新下载完成后按 release 说明中的 SHA256 块校验文件完整性，不符则取消安装并提示；release 没有校验码时跳过（兼容手动发版与历史版本）
+- **API Key 入系统凭据管理器** — 主 API Key 与 LLM 反推独立 Key 改存 Windows 凭据管理器 / macOS Keychain，settings.json 不再保留明文；老配置首次保存时自动迁移；凭据存储不可用时回退明文并在设置面板显示存储状态小字
+
 ## [0.10.0] - 2026-06-12
 
 ### Added

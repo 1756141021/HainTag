@@ -4,4 +4,5 @@ requests>=2.31
 Pillow>=11
 numpy>=2.2
 huggingface-hub>=1.0
+keyring>=25
 PyInstaller>=6.0

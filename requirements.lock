@@ -40,10 +40,22 @@ idna==3.18
     #   anyio
     #   httpx
     #   requests
+jaraco-classes==3.4.0
+    # via keyring
+jaraco-context==6.1.2
+    # via keyring
+jaraco-functools==4.5.0
+    # via keyring
+keyring==25.7.0
+    # via haintag (pyproject.toml)
 markdown-it-py==4.2.0
     # via rich
 mdurl==0.1.2
     # via markdown-it-py
+more-itertools==11.1.0
+    # via
+    #   jaraco-classes
+    #   jaraco-functools
 numpy==2.4.6
     # via haintag (pyproject.toml)
 packaging==26.2
@@ -58,6 +70,8 @@ pyqt6-qt6==6.11.1
     # via pyqt6
 pyqt6-sip==13.11.1
     # via pyqt6
+pywin32-ctypes==0.2.3
+    # via keyring
 pyyaml==6.0.3
     # via huggingface-hub
 requests==2.34.2

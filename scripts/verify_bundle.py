@@ -47,8 +47,9 @@ def main() -> int:
             fail(f"{pkg} directory missing from _internal")
 
     modules = pyz_module_names(exe)
-    if "huggingface_hub" not in modules:
-        fail("huggingface_hub missing from PYZ archive")
+    for mod in ("huggingface_hub", "keyring", "keyring.backends.Windows"):
+        if mod not in modules:
+            fail(f"{mod} missing from PYZ archive")
 
     if "onnxruntime" in modules or (internal / "onnxruntime").is_dir():
         fail("onnxruntime must stay excluded (DLL conflict; inference uses the managed subprocess)")

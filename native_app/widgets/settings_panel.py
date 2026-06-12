@@ -124,6 +124,10 @@ class SettingsPanel(QWidget):
         self.body_layout.addLayout(key_row)
         self._key_visible = False
 
+        self.key_storage_label = QLabel(body)
+        self.key_storage_label.setProperty('class', CLS_FIELD_LABEL)
+        self.body_layout.addWidget(self.key_storage_label)
+
         self.model_label = self._add_label(body)
         model_row = QHBoxLayout()
         model_row.setContentsMargins(0, 0, 0, 0)
@@ -622,6 +626,10 @@ class SettingsPanel(QWidget):
         self.api_label.setToolTip(self._translator.t('tip_api_base_url'))
         self.api_key_label.setText(self._translator.t('api_key'))
         self.api_key_label.setToolTip(self._translator.t('tip_api_key'))
+        from ..secret_store import available as _secret_store_available
+        self.key_storage_label.setText(self._translator.t(
+            'key_storage_secure' if _secret_store_available() else 'key_storage_plaintext'
+        ))
         self.api_help_label.setText(
             '<a href="https://github.com/1756141021/HainTag#%E9%85%8D%E7%BD%AE-api">'
             f'{self._translator.t("api_help_link")}</a>'

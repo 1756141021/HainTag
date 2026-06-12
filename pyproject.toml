@@ -1,6 +1,6 @@
 [project]
 name = "haintag"
-version = "0.10.0"
+version = "0.10.5"
 description = "AI 绘画 TAG 生成 · 管理 · 工作流桌面工具"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,6 +12,7 @@ dependencies = [
     "Pillow>=11",
     "numpy>=2.2",
     "huggingface-hub>=1.0",
+    "keyring>=25",
 ]
 
 [project.optional-dependencies]

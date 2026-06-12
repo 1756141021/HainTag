@@ -16,6 +16,11 @@
 - `app_data_dir(app_name)`：各平台用户数据目录唯一出处（macOS `~/Library/Application Support`，Windows `%APPDATA%`）
 - storage、python_env、models、interrogator、window 统一从这里取路径
 
+## secret_store.py
+- 系统凭据存储薄封装（keyring：Windows 凭据管理器 / macOS Keychain），service 名 `HainTag`
+- `available()` / `get_secret` / `set_secret` / `delete_secret`，全部吞异常；keyring 缺失或后端为 fail.Keyring 时视为不可用，调用方降级明文
+- 仅 storage/_state.py 和设置面板状态行使用；测试时 monkeypatch 这四个函数即可
+
 ## main.py
 - 应用启动流程：创建 QApplication → 加载字体 → 设置 QFont → 生成 QSS（含 body_font_pt + font_family） → 创建 MainWindow → exec 事件循环
 - 全局异常处理钩子（sys.excepthook）
@@ -66,7 +71,7 @@
 - **外部接口零破坏**：`from .storage import AppStorage` 不变，所有方法签名不变
 - 子管理器：
   - `_paths.py` — `StoragePaths` dataclass，共享路径根目录
-  - `_state.py` — `StateStorage`：load_state / save_state → `settings.json`。save 走 `tmp + os.replace` 原子写；遇 Windows 临时锁（AV / OneDrive 扫文件）有三档退避重试（50/150/400ms），全失败时回退直写
+  - `_state.py` — `StateStorage`：load_state / save_state → `settings.json`。save 走 `tmp + os.replace` 原子写；遇 Windows 临时锁（AV / OneDrive 扫文件）有三档退避重试（50/150/400ms），全失败时回退直写。API key 经 secret_store 出入凭据管理器：save 时入库成功则盘上置空（失败保留明文降级），key 清空则删库条目；load 时盘上为空才从库回填（盘上明文优先，下次 save 自然迁移）
   - `_likes.py` — `LikesStorage`：load_likes / save_likes → `likes.json`
   - `_hints.py` — `HintsStorage`：load_shown_hints / save_shown_hints → `hints.json`
   - `_library.py` — `LibraryStorage`：load/save_library + copy/remove_library_image → `library.json` + `library_images/`；删除只作用于托管目录内文件，路径判断按 Windows 大小写不敏感规则处理
@@ -240,7 +245,7 @@
 - **UpdateDownloadWorker**（QThread）：下载 + 验证 + 解压更新 ZIP
   - 信号：`progress(str, int)` / `download_done(str)` / `error(str)`
   - 三级 HTTP fallback 分块下载（8KB chunks），每 chunk 检查取消标志
-  - 验证：`zipfile.testzip()` + 确认任意路径下存在 `haintag.exe`（支持 flat 和子目录两种 ZIP 结构）
+  - 验证：SHA256 校验（`_parse_sha256_block` 解析 release body 的 `### SHA256` 块，dialog 取出本资产的期望值传给 worker，缺块跳过）→ `zipfile.testzip()` → 确认任意路径下存在 `haintag.exe`（支持 flat 和子目录两种 ZIP 结构）
   - 解压到临时目录，删除 ZIP，emit `download_done(extracted_dir)`
 - **`_find_update_source(extracted_dir, exe_name)`**：在解压目录顶层及一级子目录定位含 HainTag.exe 的目录（大小写不敏感），找不到返回 None
 - **`_generate_update_script(source_dir, target_dir, exe_path, failed_message, cleanup_dir)`**：生成 batch 替换脚本写入 %TEMP%
