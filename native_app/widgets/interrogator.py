@@ -1256,9 +1256,9 @@ class _LocalTaggerTab(QWidget):
         try:
             from ..tagger import TaggerEngine
             from ..python_env import get_embedded_python_path, is_env_usable
+            from ..app_paths import app_data_dir
             self._engine = TaggerEngine()
-            appdata = os.environ.get("APPDATA", "")
-            appdata_dir = os.path.join(appdata, "HainTag") if appdata else None
+            appdata_dir = str(app_data_dir())
 
             # Try find_model first (exact filenames)
             model_path, mapping_path = self._engine.find_model(

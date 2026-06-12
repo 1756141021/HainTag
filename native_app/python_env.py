@@ -1,21 +1,29 @@
-"""Embedded Python environment manager for onnxruntime subprocess fallback.
+"""Managed Python environment for the onnxruntime subprocess fallback.
 
-Downloads and sets up a standalone Python 3.12 embeddable package with
-onnxruntime, numpy, and Pillow when the host Python can't load onnxruntime.
+When the host Python can't load onnxruntime, this module provisions a
+self-contained Python with onnxruntime, numpy, and Pillow:
+
+- Windows: downloads the Python 3.12 embeddable package and bootstraps pip.
+- macOS: there is no embeddable distribution, so we create a venv from a
+  host python3 (Homebrew or system) and pip-install into it.
 """
 from __future__ import annotations
 
 import locale
 import os
+import shutil
 import subprocess
 import sys
 import zipfile
-from pathlib import Path
 from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from .app_paths import app_data_dir
+
 # ── Constants ──
+
+_IS_MAC = sys.platform == "darwin"
 
 PYTHON_VERSION = "3.12.8"
 PYTHON_EMBED_ZIP = f"python-{PYTHON_VERSION}-embed-amd64.zip"
@@ -30,16 +38,36 @@ _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 def _env_dir() -> str:
-    """Return the embedded Python environment directory path."""
-    appdata = os.environ.get("APPDATA", "")
-    if not appdata:
-        appdata = str(Path.home() / "AppData" / "Roaming")
-    return os.path.join(appdata, "HainTag", "python_env")
+    """Return the managed Python environment directory path."""
+    return str(app_data_dir() / "python_env")
+
+
+def _python_exe_in(env_dir: str) -> str:
+    """Return the interpreter path for the env layout of this platform."""
+    if _IS_MAC:
+        return os.path.join(env_dir, "bin", "python3")
+    return os.path.join(env_dir, "python.exe")
+
+
+def _find_host_python() -> str | None:
+    """Locate a host python3 suitable for `python3 -m venv` on macOS."""
+    for name in ("python3.12", "python3.11", "python3"):
+        found = shutil.which(name)
+        if found:
+            return found
+    for path in (
+        "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+        "/usr/bin/python3",
+    ):
+        if os.path.isfile(path):
+            return path
+    return None
 
 
 def get_embedded_python_path() -> str | None:
-    """Return path to embedded python.exe if it exists, else None."""
-    python_exe = os.path.join(_env_dir(), "python.exe")
+    """Return path to the managed interpreter if it exists, else None."""
+    python_exe = _python_exe_in(_env_dir())
     return python_exe if os.path.isfile(python_exe) else None
 
 
@@ -105,12 +133,15 @@ class PythonEnvSetupWorker(QThread):
     """Background worker that downloads and sets up an embedded Python env."""
 
     progress = pyqtSignal(str, int)   # message, percent (0-100)
-    finished = pyqtSignal(str)        # python.exe path
+    finished = pyqtSignal(str)        # interpreter path
     error = pyqtSignal(str)           # error message
 
     def run(self):
         try:
-            self._setup()
+            if _IS_MAC:
+                self._setup_mac()
+            else:
+                self._setup()
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -214,6 +245,80 @@ class PythonEnvSetupWorker(QThread):
         self.progress.emit("正在验证环境...", 95)
         if not is_env_usable(python_exe):
             self.error.emit("环境验证失败：onnxruntime 无法在下载的 Python 中加载")
+            return
+
+        self.progress.emit("✓ 环境配置完成", 100)
+        self.finished.emit(python_exe)
+
+    def _setup_mac(self):
+        """Provision a venv from a host python3 and install onnxruntime into it.
+
+        macOS has no embeddable Python distribution, so instead of downloading
+        an interpreter we build a venv from whatever python3 is on the system.
+        """
+        env_dir = _env_dir()
+        os.makedirs(os.path.dirname(env_dir), exist_ok=True)
+        python_exe = _python_exe_in(env_dir)
+
+        # ── Step 1: Create the venv (skip if interpreter already present) ──
+        if not os.path.isfile(python_exe):
+            host = _find_host_python()
+            if host is None:
+                self.error.emit(
+                    "未找到系统 python3。请先安装 Python，例如：\n"
+                    "  brew install python@3.12\n"
+                    "或从 python.org 安装后重试。"
+                )
+                return
+
+            self.progress.emit("正在创建 Python 虚拟环境...", 10)
+            result = subprocess.run(
+                [host, "-m", "venv", env_dir],
+                capture_output=True, text=True, timeout=180,
+            )
+            if result.returncode != 0:
+                self.error.emit(f"虚拟环境创建失败: {result.stderr.strip()}")
+                return
+            if not os.path.isfile(python_exe):
+                self.error.emit("虚拟环境创建后未找到 python3")
+                return
+        else:
+            self.progress.emit("虚拟环境已存在，检查依赖...", 30)
+
+        if self.isInterruptionRequested():
+            return
+
+        # ── Step 2: Upgrade pip (venv ships pip; no get-pip bootstrap needed) ──
+        self.progress.emit("正在升级 pip...", 40)
+        subprocess.run(
+            [python_exe, "-m", "pip", "install", "--upgrade", "pip",
+             *_pip_index_args()],
+            capture_output=True, text=True, timeout=180,
+        )
+
+        if self.isInterruptionRequested():
+            return
+
+        # ── Step 3: Install packages ──
+        self.progress.emit("正在安装 onnxruntime, numpy, Pillow...", 55)
+        result = subprocess.run(
+            [python_exe, "-m", "pip", "install",
+             "--no-warn-script-location",
+             *REQUIRED_PACKAGES,
+             *_pip_index_args()],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode != 0:
+            self.error.emit(f"依赖安装失败: {result.stderr.strip()}")
+            return
+
+        if self.isInterruptionRequested():
+            return
+
+        # ── Step 4: Validate ──
+        self.progress.emit("正在验证环境...", 95)
+        if not is_env_usable(python_exe):
+            self.error.emit("环境验证失败：onnxruntime 无法在虚拟环境中加载")
             return
 
         self.progress.emit("✓ 环境配置完成", 100)

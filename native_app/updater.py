@@ -57,6 +57,30 @@ def _is_zip_download_url(url: str) -> bool:
 
 
 def _release_download_url(assets: list[Any]) -> str:
+    """Pick the platform's installer asset: .dmg on macOS, .zip on Windows.
+
+    macOS isn't auto-installed in place — the dialog opens this URL in the
+    browser and the user drags the .app to /Applications — so we just need to
+    point at the right asset (or fall back to the Releases page).
+    """
+    if sys.platform == "darwin":
+        return _macos_download_url(assets)
+    return _windows_download_url(assets)
+
+
+def _macos_download_url(assets: list[Any]) -> str:
+    """Return the first .dmg asset (a .dmg is macOS-only), else the Releases page."""
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        url = str(asset.get("browser_download_url", "") or "")
+        name = str(asset.get("name", "") or url).lower()
+        if url and name.split("?", 1)[0].endswith(".dmg"):
+            return url
+    return _GITHUB_RELEASES_PAGE
+
+
+def _windows_download_url(assets: list[Any]) -> str:
     """Pick the Windows ZIP asset instead of blindly downloading the first file."""
     windows_candidates: list[str] = []
     generic_candidates: list[str] = []

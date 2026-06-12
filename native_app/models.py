@@ -645,16 +645,14 @@ class AppState:
                 if not isinstance(d, dict):
                     continue
                 entry = ExampleEntry.from_dict(d)
-                # Copy bundled image to AppData examples dir
+                # Copy bundled image to the app-data examples dir
                 if not entry.image_path and image_src.exists() and i == 0:
-                    import os
-                    appdata = os.environ.get("APPDATA", "")
-                    if appdata:
-                        examples_dir = Path(appdata) / "HainTag" / "examples"
-                        examples_dir.mkdir(parents=True, exist_ok=True)
-                        dest = examples_dir / f"{uuid.uuid4().hex}.png"
-                        shutil.copy2(image_src, dest)
-                        entry.image_path = str(dest)
+                    from .app_paths import app_data_dir
+                    examples_dir = app_data_dir() / "examples"
+                    examples_dir.mkdir(parents=True, exist_ok=True)
+                    dest = examples_dir / f"{uuid.uuid4().hex}.png"
+                    shutil.copy2(image_src, dest)
+                    entry.image_path = str(dest)
                 examples.append(entry)
             return examples or [ExampleEntry()]
         except Exception:
