@@ -80,6 +80,8 @@ class MetadataReader:
                     length = struct.unpack(">I", length_bytes)[0]
                     chunk_type = f.read(4)
                     chunk_data = f.read(length)
+                    if len(chunk_data) < length:
+                        break  # truncated file — drop the partial chunk
                     f.read(4)  # CRC
 
                     if chunk_type == b"tEXt":

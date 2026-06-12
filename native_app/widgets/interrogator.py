@@ -1545,6 +1545,8 @@ class _LocalTaggerTab(QWidget):
         self._worker.start()
 
     def _on_inference_error(self, error: str):
+        if self.sender() is not self._worker:
+            return
         self._last_error_text = error
         self._last_results = None
         self._all_tags_str = ""
@@ -1565,6 +1567,8 @@ class _LocalTaggerTab(QWidget):
         self._refresh_ready_status()
 
     def _on_inference_done(self, results: dict):
+        if self.sender() is not self._worker:
+            return
         self._last_results = self._normalize_local_results(results)
         self._last_error_text = ""
         total = sum(len(v) for v in self._last_results.values())

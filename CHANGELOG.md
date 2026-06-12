@@ -22,6 +22,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **PIL 图片句柄泄漏 ×7** — tagger / 调色板提取 / 缩略图缓存 / NovelAI 隐写解析 / EXIF 读取 / 隐写清除的 `Image.open` 改为上下文管理器，被查看过的图片不再因句柄占用而无法删除/改名
 - **缩略图加载失败后永久挂起** — 加载线程吞异常导致失败项永远停留在 pending、回调堆积；新增 `thumbnail_failed` 信号清理状态，失败项可重试
 - **非 Windows"打开文件位置"崩溃** — 图片管理器右键菜单的 explorer 调用加平台门，其他平台用系统文件管理器打开所在目录
+- **本地反推快速切图时旧结果覆盖新结果** — 推理 worker 被替换后旧线程的 finished/error 信号仍会落地；现在只接受当前 worker 的信号
+- **截断 PNG 产出残缺 chunk** — 元数据读写器读 chunk 时校验实际读取长度，截断文件丢弃残缺尾 chunk，销毁/编辑不再把残缺数据写回输出
 
 ### Changed
 - **代码清理** — 移除 50+ 处未使用 import、未用变量与死参数，异常链补全 `raise ... from`
