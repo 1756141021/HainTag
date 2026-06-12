@@ -255,3 +255,13 @@
 - `resources/lang/zh-CN.json`：中文翻译（所有 UI 字符串）
 - `resources/lang/en.json`：英文翻译
 - `resources/fonts/`：内嵌字体文件
+
+## 发版注意（0.10.0+）
+- release zip 必须带 `danbooru_all_2.csv`（exe 同级）：启动时会 seed 到用户数据目录，打包副本比用户副本新（mtime）才会重新 seed，漏带则词典更新不到用户手上
+- 更新批处理只在无控制台 cmd 下验证过行为（timeout/pause 不可用、`tasklist | find` 管道死锁），改动 `_generate_update_script` 前先读 updater.py 该函数 docstring
+
+## 已知未修事项（2026-06-12 审计）
+- 各 widget 关闭时不等待运行中的 worker（模型下载 / pip 安装 / Python 环境配置中关窗 → 退出时 "QThread destroyed" 警告）；修复需逐个加 closeEvent，收益低暂缓
+- A1111 解析器：prompt 文本本身含 "Steps:" / "Negative prompt:" 时分割位置有歧义，与上游 WebUI 同款行为，刻意不动
+- UpdateDownloadWorker 取消标志非原子（GIL 下最坏多处理一个 chunk，无害）
+- tag_dictionary 重复 tag 名后者覆盖前者（设计如此）
