@@ -12,6 +12,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **按需新手教程** — 快捷键面板（?）新增「新手教程」入口，11 步遮罩引导覆盖完整基础流程（配 API → 输入描述 → 生成 → 权重编辑 → 提示词/库/工具/历史），只在用户主动打开时播放，开局不打扰；教程跟手：播到对应步骤自动展开设置面板、提示词卡片与画师库，离开该步骤自动收起，气泡等面板动画结束后重新贴附目标控件
 - **工程脚手架** — `pyproject.toml`（项目元数据 + ruff 配置 + `requirements.lock` 依赖锁定）、GitHub Actions CI（push/PR 跑 ruff + 测试 + import 冒烟）、`CONTRIBUTING.md` 与 issue/PR 模板
+- **自动发版** — 推送 `vX.Y.Z` tag 自动打包 Windows zip 与 macOS dmg（Apple Silicon）并建 draft release，附 SHA256；exe 版本资源由 `scripts/gen_version_info.py` 从 `_version.py` 生成，不再手工同步
 - **核心逻辑测试集** — `tests/` 118 条 pytest 覆盖纯逻辑层：tag 归一化、消息组装 depth 语义、设置序列化往返、更新器版本比较/资产选取/源目录探测、PNG chunk 读写与截断防护、i18n 键集一致性、词典解析；本版所有已修 bug 均入回归
 - **API 配置引导** — 设置面板 API 地址/Key 标签加悬停说明（任意 OpenAI 兼容服务均可），模型行下新增「查看配置说明」链接直达 README；缺 API 报错与首启引导文案同步说明兼容范围
 - **上下文化提示气泡** — 发送快捷键提示改为首次输入时出现、权重拖拽提示改为首次生成完成时出现（此前为启动后定时弹出，时机错位）；本地反推环境配置补充下载体积与耗时预期

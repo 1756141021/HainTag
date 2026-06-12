@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Verify tag matches version files
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $code = (Select-String -Path native_app/_version.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          $pyproject = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($tag -ne "v$code") { Write-Error "tag $tag != _version.py v$code"; exit 1 }
+          if ($code -ne $pyproject) { Write-Error "_version.py $code != pyproject.toml $pyproject"; exit 1 }
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pytest
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Download tag dictionary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download dict-data --pattern danbooru_all_2.csv
+
+      - name: Build
+        run: |
+          python scripts/gen_version_info.py
+          pyinstaller AITagGenerator.spec --noconfirm
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/HainTag/HainTag.exe)) { Write-Error "HainTag.exe missing"; exit 1 }
+          if (-not (Test-Path dist/HainTag/danbooru_all_2.csv)) { Write-Error "danbooru_all_2.csv missing from bundle"; exit 1 }
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/HainTag -DestinationPath "HainTag-${{ github.ref_name }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: HainTag-${{ github.ref_name }}.zip
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Download tag dictionary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download dict-data --pattern danbooru_all_2.csv
+
+      - name: Build dmg
+        run: bash build-macos.sh
+
+      - name: Rename asset
+        run: mv dist/HainTag.dmg "HainTag-${{ github.ref_name }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: HainTag-${{ github.ref_name }}.dmg
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    if: always() && needs.build-windows.result == 'success'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+          path: assets
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: macos-dmg
+          path: assets
+
+      - name: Compose release notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          python3 scripts/extract_changelog.py "${TAG#v}" > body.md
+          cat >> body.md <<'EOF'
+
+          ---
+
+          ### 下载说明
+
+          - **Windows**：下载 zip，解压后运行 `HainTag/HainTag.exe`；升级时用解压出的 `HainTag` 文件夹整体覆盖旧目录
+          - **v0.9.x 用户注意**：旧版自动更新存在已知缺陷，如果点了更新后没有反应，请手动下载本页 zip 覆盖安装（0.10.0 起已修复）
+          - **macOS（Apple Silicon）**：下载 dmg 拖入 Applications；首次打开如提示"已损坏"，在终端执行 `xattr -dr com.apple.quarantine /Applications/HainTag.app`
+          EOF
+          if ! ls assets/*.dmg >/dev/null 2>&1; then
+            echo "" >> body.md
+            echo "> macOS 包本次构建未产出，稍后补充。" >> body.md
+          fi
+          echo "" >> body.md
+          echo "### SHA256" >> body.md
+          echo '```' >> body.md
+          (cd assets && sha256sum *) >> body.md
+          echo '```' >> body.md
+          cat body.md
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release create "$TAG" --draft --title "HainTag $TAG" --notes-file body.md "assets/HainTag-$TAG.zip"
+          if ls assets/*.dmg >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/*.dmg
+          fi

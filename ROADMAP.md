@@ -25,7 +25,7 @@
 |---|------|----|------|
 | ~~5~~ | ~~pytest 核心逻辑测试~~ | M | ✅ 2026-06-12 `tests/` 118 条：logic/llm_tagger_logic/models/updater/metadata 读写/i18n/词典；后续可向 metadata parsers、storage 往返扩展 |
 | ~~6~~ | ~~GitHub Actions CI~~ | S | ✅ 2026-06-12 `.github/workflows/ci.yml`：ruff + import 冒烟，push/PR 触发 |
-| 7 | Release workflow | M | tag 推送 → win+mac 双平台打包 → 自动建 release。PR #4 作者（Miint-Sunny）也提过，mac 侧可邀其协作 |
+| ~~7~~ | ~~Release workflow~~ | M | ✅ 2026-06-12 `.github/workflows/release.yml`：tag 推送 → win zip + mac dmg（arm64）→ draft release + SHA256；词典 CSV 走 `dict-data` 数据 release；mac 构建失败不挡 Windows 发版 |
 | ~~8~~ | ~~CONTRIBUTING + 模板~~ | S | ✅ 2026-06-12 `CONTRIBUTING.md` + issue/PR 模板 |
 | ~~9~~ | ~~pyproject.toml + 依赖锁定~~ | S | ✅ 2026-06-12 `pyproject.toml`（含 ruff 配置）+ `requirements.lock`（uv pip compile 生成） |
 

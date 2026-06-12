@@ -3,8 +3,10 @@
 > 每个文件是干什么的、负责什么功能、包含什么内容。修改功能前先查这里定位文件。
 
 ## _version.py
-- 单一版本来源：`__version__ = "0.9.11"`
-- 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角
+- 单一版本来源：`__version__ = "X.Y.Z"`
+- 被 `__init__.py` 导出，被 `window.py` 读取显示在工作区右下角；mac spec 直接读取注入 bundle 版本
+- 仓库根 `version_info.py`（Windows exe 版本资源）由 `scripts/gen_version_info.py` 从这里生成，**别手改**；发版 workflow 构建前自动跑，本地改完版本号也跑一遍
+- 改版本号同时要改 `pyproject.toml` 的 version（release workflow 守门步骤会校验三者一致）
 - 版本号遵循 SemVer（语义化版本）
 
 ## __main__.py

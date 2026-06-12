@@ -37,6 +37,15 @@ python -c "import native_app.window"
 
 CI 会在 PR 上跑同样三步。测试只覆盖纯逻辑层（不创建 QApplication），改动逻辑层时请补对应用例，约定见 `tests/DEV_NOTES.md`。
 
+## 发版流程
+
+1. 改 `native_app/_version.py` 与 `pyproject.toml` 的版本号，跑 `python scripts/gen_version_info.py` 同步 exe 版本资源，CHANGELOG.md 顶部加 `## [X.Y.Z] - 日期` 段
+2. push master，等 CI 绿
+3. `git tag vX.Y.Z && git push origin vX.Y.Z` —— release workflow 自动打 Windows zip + macOS dmg，建 **draft** release（release body 取自 CHANGELOG 对应段落 + SHA256）
+4. 在 draft 页面验收产物，确认后手动 Publish（发布后老版本的自动更新才会看到）
+
+词典数据 `danbooru_all_2.csv` 不进仓库，挂在 `dict-data` 这个 prerelease 上，CI 构建时下载。更新词典：`gh release upload dict-data danbooru_all_2.csv --clobber`。
+
 ## 约定
 
 - 版本遵循 SemVer：功能 minor、修复 patch，改 `native_app/_version.py` + 在 `CHANGELOG.md` 顶部加条目（中文，`**标题** — 描述` 格式）
