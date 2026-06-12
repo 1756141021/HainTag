@@ -141,6 +141,11 @@ class SettingsPanel(QWidget):
         model_row.addWidget(self.fetch_models_button)
         self.body_layout.addLayout(model_row)
 
+        self.api_help_label = QLabel(body)
+        self.api_help_label.setProperty('class', CLS_FIELD_LABEL)
+        self.api_help_label.setOpenExternalLinks(True)
+        self.body_layout.addWidget(self.api_help_label)
+
         self.temperature_slider, self.temperature_value, self.temperature_label = self._add_slider(body, 0, 20, 10)
         self.top_p_slider, self.top_p_value, self.top_p_label = self._add_slider(body, 0, 100, 100)
 
@@ -614,7 +619,13 @@ class SettingsPanel(QWidget):
         self.send_mode_combo.blockSignals(False)
 
         self.api_label.setText(self._translator.t('api_base_url'))
+        self.api_label.setToolTip(self._translator.t('tip_api_base_url'))
         self.api_key_label.setText(self._translator.t('api_key'))
+        self.api_key_label.setToolTip(self._translator.t('tip_api_key'))
+        self.api_help_label.setText(
+            '<a href="https://github.com/1756141021/HainTag#%E9%85%8D%E7%BD%AE-api">'
+            f'{self._translator.t("api_help_link")}</a>'
+        )
         self.eye_button.setToolTip(self._translator.t('show_hide'))
         self.model_label.setText(self._translator.t('model'))
         self.fetch_models_button.setToolTip(self._translator.t('fetch_models'))

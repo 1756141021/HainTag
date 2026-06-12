@@ -151,6 +151,11 @@ class HintManager:
         self._shown.add(hint_id)
         self._storage.save_shown_hints(self._shown)
 
+    def trigger(self, widget: QWidget, hint_id: str, text_key: str,
+                position: str = "below") -> None:
+        """Show a hint immediately at a milestone moment (once, persisted)."""
+        self._try_show(widget, hint_id, text_key, position)
+
     def show_hint(self, widget: QWidget, hint_id: str, text_key: str,
                   position: str = "below") -> None:
         """Force-show a hint regardless of whether it was shown before."""

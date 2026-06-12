@@ -2754,6 +2754,10 @@ class MainWindow(QWidget):
         self.output_widget.set_streaming(False)
         if self._current_mode == 'chat':
             self.output_widget.set_generation_status("done")
+            # First completed generation: the tag chips now exist on screen,
+            # which is the moment the weight-drag hint is demonstrable.
+            self._hint_manager.trigger(self.output_widget.full_editor, "hint_scrub",
+                                       "hint_scrub", position="above")
         self.output_widget.apply_post_processing(
             tag_full_start=s.tag_full_start,
             tag_full_end=s.tag_full_end,
@@ -3297,17 +3301,28 @@ class MainWindow(QWidget):
         overlay.start()
 
     def _register_hints(self) -> None:
-        """Register first-time-use hint bubbles on key widgets."""
+        """Register first-time-use hint bubbles on key widgets.
+
+        hint_send and hint_scrub are milestone-triggered (first typing /
+        first completed generation) instead of timed — the hint appears at
+        the moment the action becomes demonstrable.
+        """
         h = self._hint_manager
         shortcut = self._send_shortcut_text()
-        h.register(self.input_widget.send_button, "hint_send",
-                   self._translator.t("hint_send").format(shortcut=shortcut), position="above", delay_ms=2000)
+
+        def _hint_send_on_typing() -> None:
+            if not self.input_widget.text().strip():
+                return
+            self.input_widget.editor.textChanged.disconnect(_hint_send_on_typing)
+            h.trigger(self.input_widget.send_button, "hint_send",
+                      self._translator.t("hint_send").format(shortcut=shortcut), position="above")
+
+        if not h.is_shown("hint_send"):
+            self.input_widget.editor.textChanged.connect(_hint_send_on_typing)
         h.register(self.prompt_manager.preview_button, "hint_preview",
                    "hint_preview", position="above", delay_ms=3000)
         h.register(self.btn_help, "hint_help",
                    "hint_help", position="below", delay_ms=4000)
-        h.register(self.output_widget.full_editor, "hint_scrub",
-                   "hint_scrub", position="above", delay_ms=5000)
         h.register(self._lib_tab_btn, "hint_library",
                    "hint_library", position="left", delay_ms=6000)
 
@@ -3473,8 +3488,33 @@ class MainWindow(QWidget):
     def _show_shortcuts_panel(self) -> None:
         from .widgets.shortcuts_panel import ShortcutsPanel
         from PyQt6.QtGui import QCursor
-        panel = ShortcutsPanel(self._translator, send_mode=self._state.settings.send_mode, parent=self)
+        panel = ShortcutsPanel(self._translator, send_mode=self._state.settings.send_mode, parent=self,
+                               on_tutorial=self._start_tutorial)
         panel.show_at(QCursor.pos())
+
+    def _start_tutorial(self) -> None:
+        """Full on-demand tutorial — opened from the shortcuts panel, never auto-played."""
+        from .widgets.onboarding import OnboardingOverlay, OnboardingStep
+        t = self._translator.t
+        shortcut = self._send_shortcut_text()
+        self.main_card.show()
+        self.prompt_card.show()
+        overlay = OnboardingOverlay(self.surface, self._translator)
+        overlay.set_steps([
+            OnboardingStep(None, t("tut_welcome_title"), t("tut_welcome_desc")),
+            OnboardingStep(self.btn_settings, t("tut_api_title"), t("tut_api_desc"), "below"),
+            OnboardingStep(self.input_widget, t("tut_input_title"), t("tut_input_desc"), "right"),
+            OnboardingStep(self.input_widget.send_button, t("tut_send_title"),
+                           t("tut_send_desc").format(shortcut=shortcut), "above"),
+            OnboardingStep(self.main_card, t("tut_result_title"), t("tut_result_desc"), "right"),
+            OnboardingStep(self.output_widget.full_editor, t("tut_weight_title"), t("tut_weight_desc"), "right"),
+            OnboardingStep(self.prompt_card, t("tut_prompts_title"), t("tut_prompts_desc"), "right"),
+            OnboardingStep(self._lib_tab_btn, t("tut_library_title"), t("tut_library_desc"), "left"),
+            OnboardingStep(self.dock_panel, t("tut_dock_title"), t("tut_dock_desc"), "right"),
+            OnboardingStep(self.main_card, t("tut_history_title"), t("tut_history_desc"), "right"),
+            OnboardingStep(None, t("tut_finish_title"), t("tut_finish_desc")),
+        ])
+        overlay.start()
 
     def _show_prompt_preview(self) -> None:
         """Show a preview of the fully assembled prompt."""

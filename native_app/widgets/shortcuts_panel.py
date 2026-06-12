@@ -6,6 +6,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -57,7 +58,8 @@ def _shortcut_data(send_mode: str) -> list[tuple[str, list[tuple[str, str]]]]:
 class ShortcutsPanel(QWidget):
     """Popup panel showing all keyboard shortcuts and mouse gestures."""
 
-    def __init__(self, translator: Translator, send_mode: str = SEND_MODE_ENTER, parent=None):
+    def __init__(self, translator: Translator, send_mode: str = SEND_MODE_ENTER, parent=None,
+                 on_tutorial=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -137,13 +139,24 @@ class ShortcutsPanel(QWidget):
         scroll.setWidget(content)
         main_layout.addWidget(scroll, 1)
 
+        if on_tutorial is not None:
+            self.tutorial_button = QPushButton(t("tutorial_open"), surface)
+            self.tutorial_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.tutorial_button.setStyleSheet(
+                f"color: {p['accent_text']}; background: {p['accent']}; border: none; "
+                f"border-radius: 4px; padding: {_dp(5)}px {_dp(14)}px; font-size: {_fs('fs_10')};"
+            )
+            self.tutorial_button.clicked.connect(lambda: (self.close(), on_tutorial()))
+            main_layout.addWidget(self.tutorial_button, 0, Qt.AlignmentFlag.AlignRight)
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(surface)
 
         # Auto-size height
         section_count = sum(len(s) for _, s in shortcut_data) + len(shortcut_data)
-        self.setFixedHeight(min(max(_dp(300), section_count * _dp(28) + _dp(80)), _dp(550)))
+        extra = _dp(36) if on_tutorial is not None else 0
+        self.setFixedHeight(min(max(_dp(300), section_count * _dp(28) + _dp(80)) + extra, _dp(550) + extra))
 
     def show_at(self, global_pos: QPoint) -> None:
         screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()
